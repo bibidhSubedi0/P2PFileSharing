@@ -361,3 +361,70 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Build artifacts
+*.obj
+*.o
+*.lo
+*.lib
+*.a
+*.la
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Visual Studio build folders
+Debug/
+Release/
+x64/
+x86/
+ipch/
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio specific files
+.vscode/
+.vs/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# CMake (if you ever use it)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Boost build artifacts (just in case)
+bin.v2/
+boost/bin.v2/
+stage/
+
+# Test output
+test_output/
+*.testlog
+
+# Logs and temp files
+*.log
+*.tmp
+*.cache
+
+# Backup and autosave
+*~
+*.bak
+*.swp
+*.swo
+*.orig
+
+# Google Test binaries (if used)
+*.test.exe
+*.test
+
+# Output directories
+/build/
+/dist/
+/out/
