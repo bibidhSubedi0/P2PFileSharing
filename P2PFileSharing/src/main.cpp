@@ -1,30 +1,26 @@
-#include"../include/utils.h"
-#include <iostream>
-#include <boost/asio.hpp>
 
-int main(int argc, char** argv) {
+#include "../include/PeerServer.h"
 
-	/**
-	* @brief Main function of the P2P File Sharing application.
-	* 
-	* Just testing 1st the test function in utils.h
-	*/
-	test t;
-	t.testFunc();
-	std::cout << "Hello, World!" << std::endl;
-	try {
-		boost::asio::io_context io;
-		boost::asio::steady_timer timer(io, std::chrono::seconds(1));
-		timer.wait();
-		std::cout << "Boost.Asio is working! Timer completed." << std::endl;
-	}
-	catch (std::exception& e) {
-		std::cerr << "Error: " << e.what() << std::endl;
-		return 1;
-	}
-	/*::testing::InitGoogleTest(&argc, argv);
-	RUN_ALL_TESTS();*/
-	
 
-	return 0;
+int main()
+{
+
+
+
+    PeerServer ps;
+    try
+    {
+        boost::asio::io_context io_context(1);
+        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+        signals.async_wait([&](auto, auto) { io_context.stop(); });
+
+        co_spawn(io_context, ps.listener(), detached);
+
+        io_context.run();
+    }
+    catch (std::exception& e)
+    {
+        std::printf("Exception: %s\\n", e.what());
+    }
+
 }

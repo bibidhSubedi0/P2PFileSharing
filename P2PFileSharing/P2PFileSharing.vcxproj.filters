@@ -18,7 +18,10 @@
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\utils.cpp">
+    <ClCompile Include="include\PeerClient.h">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\PeerServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -27,7 +30,7 @@
     <None Include="Doxyfile" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\utils.h">
+    <ClInclude Include="include\PeerServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
