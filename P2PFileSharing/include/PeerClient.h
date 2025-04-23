@@ -1,7 +1,12 @@
 #pragma once
+#include <boost/asio.hpp>
+#include <iostream>
+#include <string>
 
-class Client
+using boost::asio::ip::tcp;
+
+class PeerClient
 {
 public:
-	
+	void connect();
 };
