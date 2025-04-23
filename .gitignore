@@ -75,4 +75,10 @@ test_output/
 Thumbs.db
 desktop.ini
 
+# === DOXYGEN GENERATED DOCS ===
+docs/html/
+docs/latex/
+docs/search/
+
+
 
