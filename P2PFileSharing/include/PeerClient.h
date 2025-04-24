@@ -7,6 +7,7 @@ using boost::asio::ip::tcp;
 
 class PeerClient
 {
+	boost::asio::io_context clientContext;
 public:
 	void connect();
 };

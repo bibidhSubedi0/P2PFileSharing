@@ -5,19 +5,19 @@ void PeerClient::connect()
     std::cout << "Attepting to connect to the server!\n";
     try
     {
-        boost::asio::io_context io_context;
+        
 
-        tcp::resolver resolver(io_context);
+        tcp::resolver resolver(clientContext);
         auto endpoints = resolver.resolve("127.0.0.1", "55555");
 
-        tcp::socket socket(io_context);
+        tcp::socket socket(clientContext);
         boost::asio::connect(socket, endpoints);
-
         std::cout << "Connected to server.\n";
 
-        for (std::string msg; std::getline(std::cin, msg);)
-        {
-            if (msg == "exit") break;
+        for(;;){
+            std::string msg;
+            std::cin >> msg;
+
 
             // Send message to server
             boost::asio::write(socket, boost::asio::buffer(msg));
@@ -29,6 +29,7 @@ void PeerClient::connect()
             std::cout.write(reply, reply_length);
             std::cout << "\n";
         }
+        
     }
     catch (std::exception& e)
     {

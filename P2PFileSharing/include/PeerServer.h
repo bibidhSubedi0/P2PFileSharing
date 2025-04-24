@@ -28,7 +28,12 @@ namespace this_coro = boost::asio::this_coro;
 
 class PeerServer
 {
+    boost::asio::io_context serverContext;
+
 public:
+    PeerServer();
+    void StartServer();
+    
     awaitable<void> echo(tcp::socket socket);
     awaitable<void> listener();
 
