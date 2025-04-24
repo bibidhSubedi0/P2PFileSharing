@@ -1,8 +1,9 @@
+
 #include "../include/PeerClient.h"
 
 void PeerClient::connect()
 {
-    std::cout << "Attepting to connect to the server!\n";
+    ClientLogger.log("Attepting to connect to the server!\n");
     try
     {
         
@@ -12,7 +13,7 @@ void PeerClient::connect()
 
         tcp::socket socket(clientContext);
         boost::asio::connect(socket, endpoints);
-        std::cout << "Connected to server.\n";
+        ClientLogger.log("Connected to server.\n");
 
         for(;;){
             std::string msg;
@@ -25,9 +26,9 @@ void PeerClient::connect()
             // Read echoed message back
             char reply[1024];
             size_t reply_length = socket.read_some(boost::asio::buffer(reply));
-            std::cout << "Echoed from server: ";
-            std::cout.write(reply, reply_length);
-            std::cout << "\n";
+            ClientLogger.log("Message Recived from server!");
+            std::string str(reply, reply_length);
+            ClientLogger.log(str);
         }
         
     }
