@@ -1,6 +1,4 @@
 #pragma once
-// pch.h
-#pragma once
 
 #include <boost/asio.hpp>
 #include <boost/asio/co_spawn.hpp>
@@ -19,10 +17,24 @@
 
 using boost::asio::ip::tcp;
 
+/**
+ * @class PeerClient
+ * @brief Handles the client-side connection to a peer-to-peer server.
+ *
+ * The PeerClient is responsible for connecting to the server, sending messages,
+ * and receiving echoed responses. It uses synchronous Boost.Asio operations.
+ */
 class PeerClient
 {
-	boost::asio::io_context clientContext;
-	logger::Logger ClientLogger;
+	boost::asio::io_context clientContext; /**< IO context used by the client. */
+	logger::Logger ClientLogger;           /**< Logger instance for logging client events. */
+
 public:
+	/**
+	 * @brief Connects the client to the server and manages message exchange.
+	 *
+	 * Resolves the server endpoint, establishes a TCP connection, and enters a loop
+	 * to send user input to the server and print echoed responses.
+	 */
 	void connect();
 };

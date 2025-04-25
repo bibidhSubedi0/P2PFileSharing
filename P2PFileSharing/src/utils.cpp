@@ -14,3 +14,9 @@ std::string GlobalUID::UIDGenerator::generate_uid() {
 	boost::uuids::uuid uuid = generator();
 	return to_string(uuid);
 }
+
+
+Peers::PeerInfo::PeerInfo(const std::string& ip, unsigned short p, const std::vector<std::string>& files)
+    :ip_address(ip), port(p), shared_files(files) {
+    last_active = std::chrono::system_clock::now();
+}

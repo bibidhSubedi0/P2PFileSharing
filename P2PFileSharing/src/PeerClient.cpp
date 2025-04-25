@@ -12,6 +12,9 @@ void PeerClient::connect()
         auto endpoints = resolver.resolve("127.0.0.1", "55555");
 
         tcp::socket socket(clientContext);
+
+        // Here is when port assignemnt happens and the 3 way handhsake for TCP occours
+        // socket can be manually binded to a port as well, but no point in doing that here
         boost::asio::connect(socket, endpoints);
         ClientLogger.log("Connected to server.\n");
 
