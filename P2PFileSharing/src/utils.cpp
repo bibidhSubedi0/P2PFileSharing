@@ -16,8 +16,8 @@ std::string GlobalUID::UIDGenerator::generate_uid() {
 }
 
 
-Peers::PeerInfo::PeerInfo(const std::string& ip, unsigned short p, const std::vector<std::string>& files)
-    :ip_address(ip), port(p), shared_files(files) {
+Peers::PeerInfo::PeerInfo(const std::string& ip, unsigned short p, std::string username, const std::vector<std::string>& files)
+    :ip_address(ip), port(p),username(username), shared_files(files) {
     last_active = std::chrono::system_clock::now();
 }
 

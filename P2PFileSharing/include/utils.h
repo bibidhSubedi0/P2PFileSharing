@@ -66,6 +66,7 @@ namespace Peers {
      * and a list of shared files.
      */
     struct PeerInfo {
+        std::string username;
         std::string ip_address;  /**< IP address of the peer. */
         unsigned short port;     /**< TCP port of the peer. */
         std::chrono::system_clock::time_point last_active; /**< Last activity timestamp. */
@@ -84,7 +85,7 @@ namespace Peers {
          * @param p Port number of the peer.
          * @param files List of shared files.
          */
-        PeerInfo(const std::string& ip, unsigned short p, const std::vector<std::string>& files);
+        PeerInfo(const std::string& ip, unsigned short p,std::string username, const std::vector<std::string>& files);
     };
 
 }

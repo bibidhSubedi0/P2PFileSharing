@@ -12,54 +12,96 @@ awaitable<void> PeerServer::listener()
    {  
        tcp::socket socket = co_await acceptor.async_accept(use_awaitable);  
          
+       // Get the username first
+       char username[1024] = { 0 };
+       std::size_t n = co_await socket.async_read_some(boost::asio::buffer(username), use_awaitable);
+
        // Generate a GUID for the new peer  
        std::string id = _uid_generator.generate_uid();  
          
+       
        // Generate the information for this peer  
-       Peers::PeerInfo _info(socket.remote_endpoint().address().to_string(), socket.remote_endpoint().port(), std::vector<std::string>{});  
+       Peers::PeerInfo _info(socket.remote_endpoint().address().to_string(), socket.remote_endpoint().port(), std::string(username), std::vector<std::string>{});
          
        // Add this peer to the list  
        _peers[id] = std::move(_info);  
          
        ServerLogger.log("New client joined the network:\n"
            "Id: " + id + "\n" +
+           "Username: "+username +"\n"+
            "IP Address: " + socket.remote_endpoint().address().to_string() + "\n" +
            "Port: " + std::to_string(socket.remote_endpoint().port()) + "\n");
          
        // Echo will later be replaced by some coroutine to handle each client  
-        co_spawn(executor, PeerConn(std::move(socket)), detached);  
+        co_spawn(executor, PeerConn(std::move(socket),id), detached);  
    }  
 }
-
-
-awaitable<void> PeerServer::PeerConn(tcp::socket socket)
+awaitable<void> PeerServer::PeerConn(tcp::socket socket, const std::string uid)
 {
     try
     {
+        std::string ip = socket.remote_endpoint().address().to_string();
+        unsigned short port = socket.remote_endpoint().port();
+
         for (;;)
         {
-            char data[1024] = { 0 };
-            std::size_t n = co_await socket.async_read_some(boost::asio::buffer(data), use_awaitable);
-            co_await async_write(socket, boost::asio::buffer(data, n), use_awaitable);
+            // Read incoming commands
+            char read_buffer[1024] = { 0 };
+            std::size_t n = co_await socket.async_read_some(boost::asio::buffer(read_buffer), use_awaitable);
 
-            // Convert received data to a string
-            std::string strx(data,n);
+            std::string received_message(read_buffer, n);
 
-            // Get IP address and port from the socket
-            std::string ip = socket.remote_endpoint().address().to_string();
-            unsigned short port = socket.remote_endpoint().port();
+            ServerLogger.log(
+                "Received message from client " + _peers[uid].username + "\t" +
+                ip + ":" + std::to_string(port) + "\n" +
+                "Message: " + received_message + "\n"
+            );
 
-            // Log the received message from the client
-            ServerLogger.log("Received message from client "+ ip + ":" +std::to_string(port) + "\n" +
-                 "Message: " + strx + "\n");
+            // Handle "list" command
+            if (received_message == "list")
+            {
+                std::string peer_list;
+                for (const auto& [peer_id, peer_info] : _peers)
+                {
+                    peer_list += peer_info.username + "\n";
+                }
+                peer_list += "END\n"; // End marker for client
 
+                co_await async_write(socket, boost::asio::buffer(peer_list), use_awaitable);
+            }
+
+            // Deafult
+            else
+            {
+                // Echo back normal message
+                co_await async_write(socket, boost::asio::buffer(read_buffer, n), use_awaitable);
+            }
         }
     }
-    catch (std::exception& e)
+    catch (boost::system::system_error& e)
     {
-        std::printf("echo Exception: %s\n", e.what());
+        try
+        {
+            if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::connection_reset)
+            {
+                ServerLogger.log(
+                    socket.remote_endpoint().address().to_string() + "+" +
+                    std::to_string(socket.remote_endpoint().port()) +
+                    "  Client disconnected."
+                );
+            }
+            else
+            {
+                ServerLogger.log(std::string("PeerConn Error: ") + e.what());
+            }
+        }
+        catch (const std::exception&)
+        {
+            ServerLogger.log("PeerConn Error: could not retrieve remote endpoint (socket already closed?)");
+        }
     }
 }
+
 
 PeerServer::PeerServer() 
 {
