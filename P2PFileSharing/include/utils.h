@@ -4,6 +4,8 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/asio.hpp>
+#include <fstream>
+
 
 /**
  * @namespace logger
@@ -84,5 +86,15 @@ namespace Peers {
          */
         PeerInfo(const std::string& ip, unsigned short p, const std::vector<std::string>& files);
     };
+
+}
+
+
+namespace FileHandling
+{
+    int makeBinaryChunks(const std::string& filename, std::size_t chunkSize = 20);
+
+    void reconstructFile(const std::string& outputFilename, int chunkCount);
+
 
 }
