@@ -58,7 +58,7 @@ public:
      * @param socket A TCP socket representing the connected peer.
      * @return awaitable<void>
      */
-    awaitable<void> PeerConn(tcp::socket socket);
+    awaitable<void> PeerConn(tcp::socket socket,const std::string uid);
 
     /**
      * @brief Listens for incoming peer connections on a specified port.

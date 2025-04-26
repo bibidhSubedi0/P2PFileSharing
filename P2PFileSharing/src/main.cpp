@@ -22,7 +22,10 @@ int main()
         // For Client role
         else {
             PeerClient pc;
-            pc.connect();
+            std::string username;
+            std::cin.ignore();
+            std::getline(std::cin, username);
+            pc.connect(username);
         }
     }
 

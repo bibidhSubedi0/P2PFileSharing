@@ -28,6 +28,7 @@ class PeerClient
 {
 	boost::asio::io_context clientContext; /**< IO context used by the client. */
 	logger::Logger ClientLogger;           /**< Logger instance for logging client events. */
+	//tcp::socket socket;
 
 public:
 	/**
@@ -36,5 +37,11 @@ public:
 	 * Resolves the server endpoint, establishes a TCP connection, and enters a loop
 	 * to send user input to the server and print echoed responses.
 	 */
-	void connect();
+	void connect(std::string username);
+
+	void queryForPeers(tcp::socket&);
+
+	void sendMessageToServer(tcp::socket&, std::string);
+
+
 };
