@@ -1,6 +1,6 @@
 
 #include "../include/PeerServer.h"
-
+#include <sstream>
 
 
 awaitable<void> PeerServer::listener()  
@@ -57,8 +57,14 @@ awaitable<void> PeerServer::PeerConn(tcp::socket socket, const std::string uid)
                 "Message: " + received_message + "\n"
             );
 
+
+
+            std::istringstream stream(received_message);
+            std::string command;
+            std::getline(stream, command, '|');  // Read up to the first '|'
+            
             // Handle "list" command
-            if (received_message == "list")
+            if (command == "list")
             {
                 std::string peer_list;
                 for (const auto& [peer_id, peer_info] : _peers)
@@ -69,13 +75,29 @@ awaitable<void> PeerServer::PeerConn(tcp::socket socket, const std::string uid)
 
                 co_await async_write(socket, boost::asio::buffer(peer_list), use_awaitable);
             }
-
-            // Deafult
-            else
+            else if (command == "echo")
             {
                 // Echo back normal message
-                co_await async_write(socket, boost::asio::buffer(read_buffer, n), use_awaitable);
+                size_t spacePos = received_message.find('|');
+                if (spacePos != std::string::npos) {
+                    received_message.erase(0, spacePos + 1);
+                }
+                co_await async_write(socket, boost::asio::buffer(received_message, received_message.length()), use_awaitable);
             }
+
+            else if (command == "conn_request") {
+                std::string connectTo;
+                std::getline(stream, connectTo, '|');  // Read the target (after '|')
+
+                ServerLogger.log("Received conn_request to connect to: " + connectTo);
+                // Handle the connection request here...
+                co_await async_write(socket, boost::asio::buffer("This is ip and port bla bla"), use_awaitable);
+            }
+            else {
+                std::cout << "Unknown command: " << command << std::endl;
+            }
+
+
         }
     }
     catch (boost::system::system_error& e)

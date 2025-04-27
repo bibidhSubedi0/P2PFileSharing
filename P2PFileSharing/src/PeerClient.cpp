@@ -1,11 +1,12 @@
-
+﻿
 #include "../include/PeerClient.h"
-
+#include <sstream>
 
 void PeerClient::sendMessageToServer(tcp::socket& socket,std::string message)
 {
     boost::asio::write(socket, boost::asio::buffer(message));
 }
+
 
 
 void PeerClient::connect(std::string username)
@@ -27,28 +28,53 @@ void PeerClient::connect(std::string username)
 
         ClientLogger.log("Connected to server.\n");
 
-        for(;;){
+        for (;;) {
             std::string msg;
-            std::cin >> msg;
+            std::getline(std::cin, msg); 
 
-            if (msg == "exit") {
+            if (msg.empty()) continue;  
+
+            std::istringstream stream(msg);
+            std::vector<std::string> commands;
+            std::string word;
+
+            while (stream >> word) {
+                commands.push_back(word);
+            }
+            if (commands.empty()) continue;
+
+            const std::string& cm = commands[0];
+            if (cm == "exit") {
                 break;
             }
-            if (msg == "list") {
+            if (cm == "list") {
                 queryForPeers(socket);
+                continue; 
+            }
+            if (cm == "connect" && commands.size() > 1) {
+                requestConnection(socket, commands[1]);
                 continue;
             }
 
-            // Send message to server
-            sendMessageToServer(socket, msg);
+            if (cm == "echo" && commands.size() > 1)
+            {
+                size_t spacePos = msg.find(' ');
+                if (spacePos != std::string::npos) {
+                    msg.erase(0, spacePos + 1);
+                }
+                sendMessageToServer(socket, "echo|"+msg);
+            }
+            
 
-            // Read echoed message back
+            // Receive server reply
             char reply[1024];
             size_t reply_length = socket.read_some(boost::asio::buffer(reply));
-            ClientLogger.log("Message Recived from server!");
             std::string str(reply, reply_length);
+            ClientLogger.log("Message Received from server!");
             ClientLogger.log(str);
         }
+
+
         
     }
     catch (std::exception& e)
@@ -63,7 +89,7 @@ void PeerClient::connect(std::string username)
 
 void PeerClient::queryForPeers(tcp::socket& socket)
 {
-    sendMessageToServer(socket, "list");
+    sendMessageToServer(socket, "list|");
     // Read until "END\n" is received
     std::string response;
     char buffer[1024];
@@ -88,3 +114,15 @@ void PeerClient::queryForPeers(tcp::socket& socket)
 }
 
 
+
+void PeerClient::requestConnection(tcp::socket& socket, std::string connect_to)
+{
+    sendMessageToServer(socket, "conn_request|"+connect_to);
+
+    char reply[1024];
+    size_t reply_length = socket.read_some(boost::asio::buffer(reply));
+    std::string str(reply, reply_length);
+    ClientLogger.log("Message Received from server!");
+    ClientLogger.log(str);
+
+}

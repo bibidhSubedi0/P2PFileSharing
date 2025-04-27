@@ -43,5 +43,7 @@ public:
 
 	void sendMessageToServer(tcp::socket&, std::string);
 
+	void requestConnection(tcp::socket&, std::string); // Only usename is enough? IDK
+
 
 };
