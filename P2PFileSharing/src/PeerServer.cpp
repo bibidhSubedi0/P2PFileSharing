@@ -24,7 +24,10 @@ awaitable<void> PeerServer::listener()
        Peers::PeerInfo _info(socket.remote_endpoint().address().to_string(), socket.remote_endpoint().port(), std::string(username), std::vector<std::string>{});
          
        // Add this peer to the list  
-       _peers[id] = std::move(_info);  
+       { 
+           std::scoped_lock lock(_peers_mutex); 
+           _peers[id] = std::move(_info);  
+       }
          
        ServerLogger.log("New client joined the network:\n"
            "Id: " + id + "\n" +
@@ -51,11 +54,15 @@ awaitable<void> PeerServer::PeerConn(tcp::socket socket, const std::string uid)
 
             std::string received_message(read_buffer, n);
 
-            ServerLogger.log(
-                "Received message from client " + _peers[uid].username + "\t" +
-                ip + ":" + std::to_string(port) + "\n" +
-                "Message: " + received_message + "\n"
-            );
+
+            {
+                std::scoped_lock lock(_peers_mutex);
+                ServerLogger.log(
+                    "Received message from client " + _peers[uid].username + "\t" +
+                    ip + ":" + std::to_string(port) + "\n" +
+                    "Message: " + received_message + "\n"
+                );
+            }
 
 
 
@@ -67,9 +74,12 @@ awaitable<void> PeerServer::PeerConn(tcp::socket socket, const std::string uid)
             if (command == "list")
             {
                 std::string peer_list;
-                for (const auto& [peer_id, peer_info] : _peers)
                 {
-                    peer_list += peer_info.username + "\n";
+                    std::scoped_lock lock(_peers_mutex);
+                    for (const auto& [peer_id, peer_info] : _peers)
+                    {
+                        peer_list += peer_info.username + "\n";
+                    }
                 }
                 peer_list += "END\n"; // End marker for client
 
@@ -91,7 +101,18 @@ awaitable<void> PeerServer::PeerConn(tcp::socket socket, const std::string uid)
 
                 ServerLogger.log("Received conn_request to connect to: " + connectTo);
                 // Handle the connection request here...
-                co_await async_write(socket, boost::asio::buffer("This is ip and port bla bla"), use_awaitable);
+                std::string requested_info;
+                {
+                    std::scoped_lock lock(_peers_mutex);
+                    for (const auto& [peer_id, peer_info] : _peers)
+                    {
+                        if (peer_info.username == connectTo) {
+                            requested_info = peer_info.ip_address + ":" + std::to_string(peer_info.port);
+                            break;
+                        }
+                    }
+                }
+                co_await async_write(socket, boost::asio::buffer(requested_info,requested_info.length()), use_awaitable);
             }
             else {
                 std::cout << "Unknown command: " << command << std::endl;
@@ -141,7 +162,9 @@ void PeerServer::StartServer()
    ServerLogger.log("Server Started!");
    
    
-   co_spawn(serverContext, listener(), detached);  
+   co_spawn(serverContext, listener(), detached); 
+
+
    serverContext.run();  
 }
 
