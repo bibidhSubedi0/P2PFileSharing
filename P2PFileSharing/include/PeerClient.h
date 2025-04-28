@@ -7,6 +7,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/asio/write.hpp>
+#include <boost/asio/awaitable.hpp>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -43,5 +44,14 @@ public:
 
 	void sendMessageToServer(tcp::socket&, std::string);
 
+	void requestConnection(tcp::socket&,  std::string); // Only usename is enough? IDK
+
+	//boost::asio::awaitable<void> CommWithServer(tcp::socket&);
+	void CommWithServer(tcp::socket&);
+	boost::asio::awaitable<void> CommWithPeers(boost::asio::ip::tcp::socket &peer_socket);
+
+	void handelConnections(tcp::socket& socket, const std::string& local_ip, unsigned short local_port);
+	
+	void listenForPeers(const std::string& local_ip, unsigned short local_port);
 
 };

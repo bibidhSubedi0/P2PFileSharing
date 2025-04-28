@@ -35,6 +35,7 @@ class PeerServer
     logger::Logger ServerLogger;            /**< Logger instance for logging events. */
     GlobalUID::UIDGenerator _uid_generator; /**< Utility to generate unique IDs for peers. */
     std::unordered_map<std::string, Peers::PeerInfo> _peers; /**< Map of peer ID to peer information. */
+    std::mutex _peers_mutex;
 
 public:
     /**
