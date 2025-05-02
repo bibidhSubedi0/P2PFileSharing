@@ -3,6 +3,8 @@
 #include "../include/PeerClient.h"
 
 
+#include<iostream>
+
 
 int main()
 {
@@ -21,11 +23,12 @@ int main()
 
         // For Client role
         else {
-            PeerClient pc;
+            
             std::string username;
             std::cin.ignore();
             std::getline(std::cin, username);
-            pc.connect(username);
+            PeerClient pc(username);
+            //pc.connect(username);
         }
     }
 
