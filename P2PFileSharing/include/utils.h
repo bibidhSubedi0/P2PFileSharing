@@ -85,7 +85,7 @@ namespace Peers {
          * @param p Port number of the peer.
          * @param files List of shared files.
          */
-        PeerInfo(const std::string& ip, unsigned short p,std::string username, const std::vector<std::string>& files);
+        PeerInfo(std::string ip, unsigned short p,std::string username, const std::vector<std::string>& files);
     };
 
 }

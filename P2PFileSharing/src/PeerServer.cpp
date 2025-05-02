@@ -180,10 +180,14 @@ awaitable<void> PeerServer::listener()
 
 
 
-
+        printStuff();
         if (username_exists) {
+
             ServerLogger.log("Continued");
-            // Check if i am reciving any commnads or not
+            // Replace the credentials of that peer
+
+
+
             std::istream is(&buffer);
             std::string command;
             std::getline(is, command, '|');
@@ -193,16 +197,38 @@ awaitable<void> PeerServer::listener()
             {
                 
                 std::string peer_list;
-                {
-                    std::scoped_lock lock(_peers_mutex);
-                    for (const auto& [peer_id, peer_info] : _peers)
+                { 
                     {
-                        peer_list += peer_info.username + "\n";
+                        std::scoped_lock lock(_peers_mutex);
+                        for (const auto& [peer_id, peer_info] : _peers)
+                        {
+                            peer_list += peer_info.username + "\n";
+                        }
                     }
                 }
                 peer_list += "END\n"; // End marker for client
 
                 co_await async_write(socket, boost::asio::buffer(peer_list), use_awaitable);
+            }
+            else if (command == "peer_endpoint") {
+                // Now update the endpoint's position
+                std::string ip;
+                std::string port;
+                std::getline(is, ip, '|');
+                std::getline(is, port, '|');
+
+                _info.ip_address = ip;
+                _info.port = std::stoi(port);
+
+                {
+                    std::scoped_lock lock(_peers_mutex);
+                    for (auto& pr : _peers) {
+                        if (pr.second.username == username)
+                            pr.second = _info;
+                    }
+                }
+                ServerLogger.log("Updated the info of " + username+ " :"+std::to_string(_info.port));
+
             }
             else if (command == "conn_request") {
                 std::string connectTo;
@@ -242,12 +268,12 @@ awaitable<void> PeerServer::listener()
             "Username: " + username + "\n" +
             "IP Address: " + socket.remote_endpoint().address().to_string() + "\n" +
             "Port: " + std::to_string(socket.remote_endpoint().port()) + "\n");
-            printStuff();
+            
     }  
 
     
     
-co_return;
+    co_return;
 }
 
 

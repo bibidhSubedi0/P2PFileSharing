@@ -57,7 +57,7 @@ public:
      * This coroutine reads data from a peer and echoes it back for now.
      * It also logs messages received from the client.
      *
-     * @param socket A TCP socket representing the connected peer.
+     * @param socket A TCP socket representing tho be connected peer.
      * @return awaitable<void>
      */
     awaitable<void> PeerConn(tcp::socket socket,const std::string uid);

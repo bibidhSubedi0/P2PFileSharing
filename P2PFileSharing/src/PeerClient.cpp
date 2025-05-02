@@ -122,13 +122,20 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
 
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), 0);
     boost::asio::ip::tcp::acceptor acceptor(clientContext, endpoint);
-
     boost::asio::ip::tcp::endpoint bound_endpoint = acceptor.local_endpoint();
-
     std::string local_ip = bound_endpoint.address().to_string();
     int local_port = bound_endpoint.port();
 
     ClientLogger.log("Listening for peer connections on " + local_ip + ":" + std::to_string(local_port));
+    
+    auto temp_socket = connectTo("127.0.0.1", "55555", clientContext);
+    sendMessageToServer(temp_socket, _username + "\n");
+    sendMessageToServer(temp_socket, "peer_endpoint|");
+    sendMessageToServer(temp_socket, local_ip+"|");
+    sendMessageToServer(temp_socket, std::to_string(local_port) + "|\n");
+    disconnectFrom(temp_socket);
+
+
 
     try {
         while (true) {
