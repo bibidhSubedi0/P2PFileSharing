@@ -50,6 +50,7 @@ public:
      */
     void StartServer();
 
+    void printStuff();
     /**
      * @brief Handles communication with a connected peer.
      *

@@ -4,48 +4,182 @@
 #include <boost/asio/ip/address_v4.hpp>
 #include <sstream>
 #include<queue>
+/*
 
-void PeerClient::sendMessageToServer(tcp::socket& socket,std::string message)
+
+
+*/
+void PeerClient::sendMessageToServer(tcp::socket& socket, std::string message)
 {
     boost::asio::write(socket, boost::asio::buffer(message));
 }
-
-
-
-void PeerClient::connect(std::string username)
-{
-    ClientLogger.log("Attepting to connect to the server!\n");
-    try
-    {
-  
-        tcp::resolver resolver(clientContext);
-        auto endpoints = resolver.resolve("127.0.0.1", "55555");
-
-        tcp::socket socket(clientContext);
-
-        // For now i am connected to the server
-        boost::asio::connect(socket, endpoints);
-        sendMessageToServer(socket, username);
-
-
-        // Ip and port assigned to this peer by the OS
-        auto local_ep = socket.local_endpoint();
-        std::string local_ip = local_ep.address().to_string();
-        unsigned short local_port = local_ep.port();
-
-        ClientLogger.log("Connect to the server with: " + local_ip + ":" + std::to_string(local_port));
-
-        // Handel both connection to server and peers
-        handelConnections(socket,local_ip,local_port);
-
+void disconnectFrom(tcp::socket& socket) {
+    if (socket.is_open()) {
+        boost::system::error_code ec;
+        socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+        socket.close(ec);
+        // Optional: Handle error code if needed
     }
-    catch (std::exception& e)
-    {
-        std::cerr << "Client Exception: " << e.what() << "\n";
-    }
-
-    ClientLogger.log("\n\n\nSession Ended");
 }
+
+
+
+tcp::socket connectTo(const std::string& ip, const std::string& port, boost::asio::io_context& context) {
+
+    tcp::resolver resolver(context);
+    auto endpoints = resolver.resolve(ip, port);
+
+    tcp::socket socket(context);
+    boost::asio::connect(socket, endpoints);
+
+    return socket;
+}
+
+PeerClient::PeerClient(std::string username)
+{
+    _username = username;
+
+    // Register to the server
+    auto socket = connectTo("127.0.0.1", "55555", clientContext);
+
+
+    sendMessageToServer(socket, username+"\n");
+    disconnectFrom(socket);
+
+
+    // Ip and port assigned to this peer by the OS
+    /*auto local_ep = socket.local_endpoint();
+    std::string local_ip = local_ep.address().to_string();
+    unsigned short local_port = local_ep.port();*/
+
+
+    boost::asio::co_spawn(clientContext, listenForPeers(), boost::asio::detached);
+    std::thread input_thread(&PeerClient::mainLoop, this);
+    //std::thread input_thread([this]() { this->mainLoop(); });
+
+
+
+    clientContext.run();
+    input_thread.join();
+
+}
+
+void PeerClient::mainLoop()
+{
+    ClientLogger.log("Started the io thread");
+    for (;;) {
+        std::string msg;
+        std::getline(std::cin, msg);
+        if (msg.empty()) continue;
+
+        std::istringstream stream(msg);
+        std::vector<std::string> commands;
+        std::string word;
+
+
+        while (stream >> word) {
+            commands.push_back(word);
+        }
+        if (commands.empty()) continue;
+
+        const std::string& cm = commands[0];
+        if (cm == "exit") {
+            break;
+        }
+        if (cm == "list") {
+            queryForPeers();
+            continue;
+        }
+        if (cm == "connect" && commands.size() > 1) {
+            //requestConnection(commands[1]);
+            continue;
+        }
+
+        if (cm == "echo" && commands.size() > 1)
+        {
+            size_t spacePos = msg.find(' ');
+            if (spacePos != std::string::npos) {
+                msg.erase(0, spacePos + 1);
+            }
+
+
+            continue;
+            //sendMessageToServer(socket, "echo|" + msg);
+
+            // No continue cuz we are waiting for the reply
+            // Good desgin? Fuck no! Does it work? yep
+        }
+        else {
+            ClientLogger.log("Invalid Command!");
+            continue;
+        }
+
+
+    }
+}
+
+boost::asio::awaitable<void> PeerClient::listenForPeers() {
+
+    boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), 0);
+    boost::asio::ip::tcp::acceptor acceptor(clientContext, endpoint);
+
+    boost::asio::ip::tcp::endpoint bound_endpoint = acceptor.local_endpoint();
+
+    std::string local_ip = bound_endpoint.address().to_string();
+    int local_port = bound_endpoint.port();
+
+    ClientLogger.log("Listening for peer connections on " + local_ip + ":" + std::to_string(local_port));
+
+    try {
+        while (true) {
+            // Async accept (non-blocking)
+            boost::asio::ip::tcp::socket peer_socket = co_await acceptor.async_accept(boost::asio::use_awaitable);
+
+            // Log accepted connection
+            ClientLogger.log("Accepted connection from: " +
+                peer_socket.remote_endpoint().address().to_string() + ":" +
+                std::to_string(peer_socket.remote_endpoint().port()));
+
+            // Handle peer communication asynchronously
+            //boost::asio::co_spawn(clientContext, CommWithPeers(std::move(peer_socket)), boost::asio::detached);
+        }
+    }
+    catch (std::exception& e) {
+        std::cerr << "Peer acceptor exception: " << e.what() << "\n";
+    }
+}
+
+void PeerClient::queryForPeers()
+{
+    auto socket = connectTo("127.0.0.1", "55555", clientContext);
+    sendMessageToServer(socket, _username + "\n");
+    sendMessageToServer(socket, "list|\n");
+    // Read until "END\n" is received
+    std::string response;
+    char buffer[1024];
+    for (;;)
+    {
+        size_t n = socket.read_some(boost::asio::buffer(buffer));
+        std::string chunk(buffer, n);
+        response += chunk;
+
+        // Check for termination signal
+        if (response.find("END\n") != std::string::npos)
+            break;
+    }
+
+    // Strip END and print the list
+    size_t endPos = response.find("END\n");
+    if (endPos != std::string::npos) {
+        response = response.substr(0, endPos);
+    }
+
+    ClientLogger.log("Peer List:\n" + response + "\n");
+    disconnectFrom(socket);
+}
+
+
+/*
 
 void PeerClient::handelConnections(tcp::socket& socket, const std::string& local_ip, unsigned short local_port) {
 
@@ -63,29 +197,7 @@ void PeerClient::handelConnections(tcp::socket& socket, const std::string& local
 }
 
 
-void PeerClient::listenForPeers(const std::string& local_ip, unsigned short local_port) {
 
-    try {
-        boost::asio::ip::tcp::acceptor acceptor(clientContext,
-            boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(local_ip), local_port));
-
-        ClientLogger.log("Listening for peer connections on " + local_ip + ":" + std::to_string(local_port));
-
-        while (true) {
-            // Accept an incoming connection from another client
-            boost::asio::ip::tcp::socket peer_socket(clientContext);
-            acceptor.accept(peer_socket);
-
-            // Handle the connection with a coroutine
-            ClientLogger.log("Accepted connection from: " + peer_socket.remote_endpoint().address().to_string() + ":" + std::to_string(peer_socket.remote_endpoint().port()));
-            boost::asio::co_spawn(clientContext, CommWithPeers(peer_socket), boost::asio::detached);
-            clientContext.run();
-        }
-    }
-    catch (std::exception& e) {
-        std::cerr << "Peer acceptor exception: " << e.what() << "\n";
-    }
-}
 
 boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::socket &peer_socket) {
     try {
@@ -105,9 +217,6 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
         std::cerr << "Peer communication failed: " << e.what() << std::endl;
     }
 }
-
-
-
 
 void PeerClient::CommWithServer(tcp::socket& socket){
     for (;;) {
@@ -130,11 +239,11 @@ void PeerClient::CommWithServer(tcp::socket& socket){
             break;
         }
         if (cm == "list") {
-            queryForPeers(socket);
+            //queryForPeers(socket);
             continue;
         }
         if (cm == "connect" && commands.size() > 1) {
-            requestConnection(socket, commands[1]);
+            requestConnection(commands[1]);
             continue;
         }
 
@@ -167,40 +276,11 @@ void PeerClient::CommWithServer(tcp::socket& socket){
 }
 
 
-
-
-
-void PeerClient::queryForPeers(tcp::socket& socket)
+void PeerClient::requestConnection(std::string connect_to)
 {
-    sendMessageToServer(socket, "list|");
-    // Read until "END\n" is received
-    std::string response;
-    char buffer[1024];
-    for (;;)
-    {
-        size_t n = socket.read_some(boost::asio::buffer(buffer));
-        std::string chunk(buffer, n);
-        response += chunk;
-
-        // Check for termination signal
-        if (response.find("END\n") != std::string::npos)
-            break;
-    }
-
-    // Strip END and print the list
-    size_t endPos = response.find("END\n");
-    if (endPos != std::string::npos) {
-        response = response.substr(0, endPos);
-    }
-
-    ClientLogger.log("Peer List:\n" + response + "\n");
-}
-
-
-
-void PeerClient::requestConnection(tcp::socket& socket, std::string connect_to)
-{
-    sendMessageToServer(socket, "conn_request|"+connect_to);
+    auto socket = connectTo("127.0.0.1", "55555", clientContext);
+    sendMessageToServer(socket, _username + "\n");
+    sendMessageToServer(socket, "conn_request|"+connect_to+"\n");
 
     char reply[1024];
     size_t reply_length = socket.read_some(boost::asio::buffer(reply));
@@ -219,6 +299,7 @@ void PeerClient::requestConnection(tcp::socket& socket, std::string connect_to)
     // Now we have ip and port, make the connection to the client directly
 
     
+    // We are connecting with new socket
     tcp::resolver resolver(clientContext);
     auto endpoints = resolver.resolve(ip, port);
     tcp::socket privateSocket(clientContext);
@@ -229,9 +310,6 @@ void PeerClient::requestConnection(tcp::socket& socket, std::string connect_to)
     ClientLogger.log("Connection Successful");
     
 
-    //ClientLogger.log("Connected to server.\n");
-
-    
-
 
 }
+*/
