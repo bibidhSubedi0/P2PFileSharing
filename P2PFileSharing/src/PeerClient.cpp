@@ -91,7 +91,7 @@ void PeerClient::mainLoop()
             continue;
         }
         if (cm == "connect" && commands.size() > 1) {
-            //requestConnection(commands[1]);
+            requestConnection(commands[1]);
             continue;
         }
 
@@ -123,7 +123,20 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), 0);
     boost::asio::ip::tcp::acceptor acceptor(clientContext, endpoint);
     boost::asio::ip::tcp::endpoint bound_endpoint = acceptor.local_endpoint();
-    std::string local_ip = bound_endpoint.address().to_string();
+    
+    // Get the actual LAN IP
+    boost::asio::ip::tcp::resolver resolver(clientContext);
+    auto results = resolver.resolve(boost::asio::ip::host_name(), "");
+
+    // Find the first non-loopback address
+    std::string local_ip = "127.0.0.1";  // fallback
+    for (const auto& entry : results) {
+        boost::asio::ip::tcp::endpoint ep = entry.endpoint();
+        if (ep.address().is_v4() && !ep.address().is_loopback()) {
+            local_ip = ep.address().to_string();
+            break;
+        }
+    }
     int local_port = bound_endpoint.port();
 
     ClientLogger.log("Listening for peer connections on " + local_ip + ":" + std::to_string(local_port));
@@ -185,6 +198,48 @@ void PeerClient::queryForPeers()
     disconnectFrom(socket);
 }
 
+
+void PeerClient::requestConnection(std::string connect_to)
+{
+    auto socket = connectTo("127.0.0.1", "55555", clientContext);
+    sendMessageToServer(socket, _username + "\n");
+    sendMessageToServer(socket, "conn_request|" + connect_to + "\n");
+
+    char reply[1024];
+    size_t reply_length = socket.read_some(boost::asio::buffer(reply));
+    std::string str(reply, reply_length);
+    ClientLogger.log("Message Received from server!");
+    ClientLogger.log(str);
+
+    std::istringstream stream(str);
+
+    std::string ip;
+
+    std::getline(stream, ip, ':');
+    std::string port;
+    std::getline(stream, port, ' ');
+
+    // Now we have ip and port, make the connection to the client directly
+    disconnectFrom(socket);
+
+
+    // We are connecting with new socket
+    tcp::resolver resolver(clientContext);
+    auto endpoints = resolver.resolve(ip, port);
+    tcp::socket privateSocket(clientContext);
+
+    ClientLogger.log("Attempting connectinon to  " + ip + ":" + port);
+    try
+    {
+        boost::asio::connect(privateSocket, endpoints);
+        boost::asio::write(privateSocket, boost::asio::buffer("Lolol, sup bro"));
+        ClientLogger.log("Connection Successful");
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Peer connection failed : " << e.what() << std::endl;
+    }
+
+}
 
 /*
 
@@ -283,38 +338,7 @@ void PeerClient::CommWithServer(tcp::socket& socket){
 }
 
 
-void PeerClient::requestConnection(std::string connect_to)
-{
-    auto socket = connectTo("127.0.0.1", "55555", clientContext);
-    sendMessageToServer(socket, _username + "\n");
-    sendMessageToServer(socket, "conn_request|"+connect_to+"\n");
 
-    char reply[1024];
-    size_t reply_length = socket.read_some(boost::asio::buffer(reply));
-    std::string str(reply, reply_length);
-    ClientLogger.log("Message Received from server!");
-    ClientLogger.log(str);
-
-    std::istringstream stream(str);
-
-    std::string ip;
-
-    std::getline(stream, ip, ':');
-    std::string port;
-    std::getline(stream, port, ' ');
-    
-    // Now we have ip and port, make the connection to the client directly
-
-    
-    // We are connecting with new socket
-    tcp::resolver resolver(clientContext);
-    auto endpoints = resolver.resolve(ip, port);
-    tcp::socket privateSocket(clientContext);
-
-    ClientLogger.log("Attempting connectinon to : "+ip+":" + port);
-    boost::asio::connect(privateSocket, endpoints);
-    boost::asio::write(privateSocket, boost::asio::buffer("Lolol, sup bro"));
-    ClientLogger.log("Connection Successful");
     
 
 
