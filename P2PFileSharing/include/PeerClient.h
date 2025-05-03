@@ -54,7 +54,7 @@ public:
 	//boost::asio::awaitable<void> CommWithServer(tcp::socket&);
 	void CommWithServer(tcp::socket&);
 
-	boost::asio::awaitable<void> CommWithPeers(boost::asio::ip::tcp::socket &peer_socket);
+	boost::asio::awaitable<void> CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string);
 
 	void handelConnections(tcp::socket& socket, const std::string& local_ip, unsigned short local_port);
 	
