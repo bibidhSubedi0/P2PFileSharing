@@ -160,8 +160,10 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
                 peer_socket.remote_endpoint().address().to_string() + ":" +
                 std::to_string(peer_socket.remote_endpoint().port()));
 
+
+
             // Handle peer communication asynchronously
-            //boost::asio::co_spawn(clientContext, CommWithPeers(std::move(peer_socket)), boost::asio::detached);
+            boost::asio::co_spawn(clientContext, CommWithPeers(std::move(peer_socket),std::to_string(peer_socket.remote_endpoint().port())), boost::asio::detached);
         }
     }
     catch (std::exception& e) {
@@ -232,36 +234,22 @@ void PeerClient::requestConnection(std::string connect_to)
     try
     {
         boost::asio::connect(privateSocket, endpoints);
-        boost::asio::write(privateSocket, boost::asio::buffer("Lolol, sup bro"));
         ClientLogger.log("Connection Successful");
+
+        boost::asio::write(privateSocket, boost::asio::buffer("Lolol, sup bro"));
     }
     catch (const std::exception& e) {
         std::cerr << "Peer connection failed : " << e.what() << std::endl;
     }
+    ClientLogger.log("Okay it works fine ig");
+    boost::asio::co_spawn(clientContext,
+        PeerClient::CommWithPeers(std::move(privateSocket), connect_to),
+        boost::asio::detached);
+
 
 }
 
-/*
-
-void PeerClient::handelConnections(tcp::socket& socket, const std::string& local_ip, unsigned short local_port) {
-
-    // To listen to peers
-    std::thread accept_thread(&PeerClient::listenForPeers, this, local_ip, local_port);
-    accept_thread.detach();
-
-
-    // To handel the connection with server for queries
-    std::thread input_thread(&PeerClient::CommWithServer, this, std::ref(socket));
-
-    
-    clientContext.run();
-    input_thread.join();
-}
-
-
-
-
-boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::socket &peer_socket) {
+boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string username) {
     try {
         ClientLogger.log("Waiting for meesage from : " + peer_socket.remote_endpoint().address().to_string() + ":" + std::to_string(peer_socket.remote_endpoint().port()));
         for (;;) {
@@ -269,78 +257,14 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
             size_t length = co_await peer_socket.async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
 
             std::string message(data, length);
-            ClientLogger.log("Received message from peer: " + message);
+            ClientLogger.log( std::to_string(peer_socket.remote_endpoint().port()) + ": " + message);
+
 
             // Handle peer message here (e.g., echo it back or process the data)
-            co_await peer_socket.async_write_some(boost::asio::buffer("Message received"), boost::asio::use_awaitable);
+
         }
     }
     catch (const std::exception& e) {
         std::cerr << "Peer communication failed: " << e.what() << std::endl;
     }
 }
-
-void PeerClient::CommWithServer(tcp::socket& socket){
-    for (;;) {
-        std::string msg;
-        std::getline(std::cin, msg);
-        if (msg.empty()) continue;
-
-        std::istringstream stream(msg);
-        std::vector<std::string> commands;
-        std::string word;
-        
-
-        while (stream >> word) {
-            commands.push_back(word);
-        }
-        if (commands.empty()) continue;
-
-        const std::string& cm = commands[0];
-        if (cm == "exit") {
-            break;
-        }
-        if (cm == "list") {
-            //queryForPeers(socket);
-            continue;
-        }
-        if (cm == "connect" && commands.size() > 1) {
-            requestConnection(commands[1]);
-            continue;
-        }
-
-        if (cm == "echo" && commands.size() > 1)
-        {
-            size_t spacePos = msg.find(' ');
-            if (spacePos != std::string::npos) {
-                msg.erase(0, spacePos + 1);
-            }
-            sendMessageToServer(socket, "echo|" + msg);
-
-            // No continue cuz we are waiting for the reply
-            // Good desgin? Fuck no! Does it work? yep
-        }
-        else {
-            ClientLogger.log("Invalid Command!");
-            continue;
-        }
-
-
-        // Receive server reply
-        char reply[1024];
-        size_t reply_length = socket.read_some(boost::asio::buffer(reply));
-        std::string str(reply, reply_length);
-        ClientLogger.log("Message Received from server!");
-        ClientLogger.log(str);
-    }
-    //inputThread.join(); // Wait for input thread to finish before exiting
-
-}
-
-
-
-    
-
-
-}
-*/
