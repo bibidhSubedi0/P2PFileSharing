@@ -13,18 +13,21 @@
  */
 namespace logger
 {
+    enum class LogLevel { Info, Success, Error, Warn };
+
     /**
      * @class Logger
-     * @brief Provides timestamped logging functionality.
+     * @brief Provides timestamped logging functionality with log levels.
      */
     class Logger {
     public:
         /**
-         * @brief Logs a message with a current timestamp to standard output.
+         * @brief Logs a message with a current timestamp and log level to standard output.
          *
          * @param message The message to log.
+         * @param level The log level (default is Info).
          */
-        void log(std::string message);
+        void log(const std::string& message, LogLevel level = LogLevel::Info);
     };
 }
 

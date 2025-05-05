@@ -3,10 +3,25 @@
 #include <chrono>
 #include <format>
 
-void logger::Logger::log(std::string message) {
-    auto now = std::chrono::system_clock::now();
-    std::string timestamp = std::format("{:%Y-%m-%d %H:%M:%S}", now);
-    std::cout << "[" << timestamp << "] " << message << std::endl;
+namespace logger
+{
+    static std::string logLevelToString(LogLevel level) {
+        switch (level) {
+        case LogLevel::Info: return "INFO";
+        case LogLevel::Success: return "SUCCESS";
+        case LogLevel::Error: return "ERROR";
+        case LogLevel::Warn: return "WARN";
+        default: return "UNKNOWN";
+        }
+    }
+
+    void Logger::log(const std::string& message, LogLevel level) {
+        auto now = std::chrono::system_clock::now();
+        std::string timestamp = std::format("{:%Y-%m-%d %H:%M:%S}", now);
+        std::cout << "[" << timestamp << "] "
+            << "[" << logLevelToString(level) << "] "
+            << message << std::endl;
+    }
 }
 
 std::string GlobalUID::UIDGenerator::generate_uid() {
