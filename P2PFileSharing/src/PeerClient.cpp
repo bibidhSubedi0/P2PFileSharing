@@ -57,8 +57,6 @@ PeerClient::PeerClient(std::string username)
     std::thread input_thread(&PeerClient::mainLoop, this);
     //std::thread input_thread([this]() { this->mainLoop(); });
 
-
-
     clientContext.run();
     input_thread.join();
 
@@ -84,6 +82,7 @@ void PeerClient::mainLoop()
 
         const std::string& cm = commands[0];
         if (cm == "exit") {
+            ClientLogger.log("Connection to the server broken");
             break;
         }
         if (cm == "list") {
@@ -95,20 +94,13 @@ void PeerClient::mainLoop()
             continue;
         }
 
-        if (cm == "echo" && commands.size() > 1)
-        {
-            size_t spacePos = msg.find(' ');
-            if (spacePos != std::string::npos) {
-                msg.erase(0, spacePos + 1);
-            }
-
-
+        // send peer1 k xa dosttt
+        if ((cm == "send" && commands.size() > 2) || (cm == "echo" && commands.size() > 1)) {
+            sendMessageToPeers(cm, commands, msg);
             continue;
-            //sendMessageToServer(socket, "echo|" + msg);
-
-            // No continue cuz we are waiting for the reply
-            // Good desgin? Fuck no! Does it work? yep
         }
+
+
         else {
             ClientLogger.log("Invalid Command!");
             continue;
@@ -117,6 +109,45 @@ void PeerClient::mainLoop()
 
     }
 }
+
+void PeerClient::sendMessageToPeers(const std::string& cm, const std::vector<std::string>& commands, const std::string& msg) {
+    if (cm == "send" && commands.size() > 2) {
+        const std::string& target = commands[1];
+        std::string content = msg.substr(msg.find(target) + target.length() + 1);
+
+        std::shared_ptr<tcp::socket> peerSocket;
+        {
+            std::lock_guard<std::mutex> lock(_peerMutex);
+            for (const auto& [key, socket] : _connectedPeers) {
+                if (key.rfind(target + "@", 0) == 0) {  // peer name match
+                    peerSocket = socket;
+                    break;
+                }
+            }
+        }
+
+        if (peerSocket && peerSocket->is_open()) {
+            boost::asio::write(*peerSocket, boost::asio::buffer(content));
+        }
+        else {
+            ClientLogger.log("Peer not connected: " + target);
+        }
+    }
+
+    else if (cm == "echo" && commands.size() > 1) {
+        std::lock_guard<std::mutex> lock(_peerMutex);
+        for (auto& [name, socket_ptr] : _connectedPeers) {
+            try {
+                boost::asio::write(*socket_ptr, boost::asio::buffer(msg + "\n"));
+            }
+            catch (const std::exception& e) {
+                ClientLogger.log("Failed to send to " + name + ": " + e.what());
+            }
+        }
+    }
+}
+
+
 
 boost::asio::awaitable<void> PeerClient::listenForPeers() {
 
@@ -156,20 +187,30 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
             boost::asio::ip::tcp::socket peer_socket = co_await acceptor.async_accept(boost::asio::use_awaitable);
 
             // Log accepted connection
-            ClientLogger.log("Accepted connection from: " +
-                peer_socket.remote_endpoint().address().to_string() + ":" +
-                std::to_string(peer_socket.remote_endpoint().port()));
+            
+
+            boost::asio::streambuf buffer;
+            co_await async_read_until(peer_socket, buffer, "\n", boost::asio::use_awaitable);
+            std::istream is(&buffer);
+            std::string target_username;
+            std::getline(is, target_username);
+
+            ClientLogger.log("Accepted connection from: " + target_username);//+"\t" +
+                /*peer_socket.remote_endpoint().address().to_string() + ":" +
+                std::to_string(peer_socket.remote_endpoint().port()));*/
+
 
 
 
             // Handle peer communication asynchronously
-            boost::asio::co_spawn(clientContext, CommWithPeers(std::move(peer_socket),std::to_string(peer_socket.remote_endpoint().port())), boost::asio::detached);
+            boost::asio::co_spawn(clientContext, CommWithPeers(std::move(peer_socket),target_username), boost::asio::detached);
         }
     }
     catch (std::exception& e) {
         std::cerr << "Peer acceptor exception: " << e.what() << "\n";
     }
 }
+
 
 void PeerClient::queryForPeers()
 {
@@ -234,35 +275,57 @@ void PeerClient::requestConnection(std::string connect_to)
     try
     {
         boost::asio::connect(privateSocket, endpoints);
-        ClientLogger.log("Connection Successful");
-
-        boost::asio::write(privateSocket, boost::asio::buffer("Lolol, sup bro"));
+        // Send username as well!
+        boost::asio::write(privateSocket, boost::asio::buffer(_username+"\n"));
+        ClientLogger.log("Connection Successful");\
     }
     catch (const std::exception& e) {
         std::cerr << "Peer connection failed : " << e.what() << std::endl;
     }
     ClientLogger.log("Okay it works fine ig");
+
+
+
+
+
     boost::asio::co_spawn(clientContext,
         PeerClient::CommWithPeers(std::move(privateSocket), connect_to),
         boost::asio::detached);
+    
 
 
 }
 
+
+
+
+
+
 boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string username) {
+    
     try {
-        ClientLogger.log("Waiting for meesage from : " + peer_socket.remote_endpoint().address().to_string() + ":" + std::to_string(peer_socket.remote_endpoint().port()));
+        auto remote_ep = peer_socket.remote_endpoint();
+
+        // Key will be in form of peerx@192.168.1.1:56200
+        std::string key = username + "@" + remote_ep.address().to_string() + ":" + std::to_string(remote_ep.port());
+
+        {
+            std::lock_guard<std::mutex> lock(_peerMutex);
+            _connectedPeers[key] = std::make_shared<tcp::socket>(std::move(peer_socket));
+        }
+
+        ClientLogger.log("Connected to peer: " + key);
+        
+        
         for (;;) {
             char data[1024];
-            size_t length = co_await peer_socket.async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
-
+            size_t length = co_await _connectedPeers[key]->async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
             std::string message(data, length);
-            ClientLogger.log( std::to_string(peer_socket.remote_endpoint().port()) + ": " + message);
-
-
-            // Handle peer message here (e.g., echo it back or process the data)
-
-        }
+            ClientLogger.log(key + ": " + message);
+    
+        // Handle peer message here (e.g., echo it back or process the data)
+    
+    }
     }
     catch (const std::exception& e) {
         std::cerr << "Peer communication failed: " << e.what() << std::endl;

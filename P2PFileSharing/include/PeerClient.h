@@ -30,6 +30,8 @@ class PeerClient
 	boost::asio::io_context clientContext; /**< IO context used by the client. */
 	logger::Logger ClientLogger;           /**< Logger instance for logging client events. */
 	std::string _username;
+	std::unordered_map<std::string, std::shared_ptr<tcp::socket>> _connectedPeers;
+	std::mutex _peerMutex;
 	//tcp::socket socket;
 
 public:
@@ -41,27 +43,16 @@ public:
 	 */
 	PeerClient(std::string);
 
-	void connect(std::string username);
-
 	void mainLoop();
 
 	void queryForPeers();
 
 	void sendMessageToServer(tcp::socket&, std::string);
+	void sendMessageToPeers(const std::string& , const std::vector<std::string>&, const std::string&);
 
 	void requestConnection(std::string); // Only usename is enough? IDK
 
-	//boost::asio::awaitable<void> CommWithServer(tcp::socket&);
-	void CommWithServer(tcp::socket&);
-
 	boost::asio::awaitable<void> CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string);
-
-	void handelConnections(tcp::socket& socket, const std::string& local_ip, unsigned short local_port);
 	
 	boost::asio::awaitable<void> listenForPeers();
-
-	void processCommand(const std::string& msg);
-
-	void start();
-
 };
