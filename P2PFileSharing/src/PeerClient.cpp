@@ -251,8 +251,6 @@ void PeerClient::requestConnection(std::string connect_to)
     char reply[1024];
     size_t reply_length = socket.read_some(boost::asio::buffer(reply));
     std::string str(reply, reply_length);
-    ClientLogger.log("Message Received from server!");
-    ClientLogger.log(str);
 
     std::istringstream stream(str);
 
@@ -271,7 +269,7 @@ void PeerClient::requestConnection(std::string connect_to)
     auto endpoints = resolver.resolve(ip, port);
     tcp::socket privateSocket(clientContext);
 
-    ClientLogger.log("Attempting connectinon to  " + ip + ":" + port);
+    ClientLogger.log("Attempting connectinon to  "+connect_to+ " at " + ip + ":" + port);
     try
     {
         boost::asio::connect(privateSocket, endpoints);
@@ -282,7 +280,6 @@ void PeerClient::requestConnection(std::string connect_to)
     catch (const std::exception& e) {
         std::cerr << "Peer connection failed : " << e.what() << std::endl;
     }
-    ClientLogger.log("Okay it works fine ig");
 
 
 
