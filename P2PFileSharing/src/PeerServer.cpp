@@ -99,7 +99,7 @@ awaitable<void> PeerServer::listener()
                 std::string connectTo;
                 std::getline(is, connectTo);
 
-                ServerLogger.log(username + " requested connection to " + connectTo, logger::LogLevel::Info);
+                ServerLogger.log(username + " z " + connectTo, logger::LogLevel::Info);
 
                 std::string requested_info;
                 {

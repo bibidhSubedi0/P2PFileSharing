@@ -57,6 +57,8 @@ PeerClient::PeerClient(std::string username)
     std::thread input_thread(&PeerClient::mainLoop, this);
     //std::thread input_thread([this]() { this->mainLoop(); });
 
+    connectToAll(queryForPeers());
+
     clientContext.run();
     input_thread.join();
 
@@ -86,13 +88,18 @@ void PeerClient::mainLoop()
             break;
         }
         if (cm == "list") {
-            queryForPeers();
+            std::string list = queryForPeers();
+            ClientLogger.log("Peer List:\n" + list);
             continue;
         }
-        if (cm == "connect" && commands.size() > 1) {
-            requestConnection(commands[1]);
-            continue;
-        }
+        //if (cm == "connect" && commands.size() > 1) {
+        //    requestConnection(commands[1]);
+        //    continue;
+        //}
+        //if (cm == "connect" && commands.size() == 1) {
+        //    connectToAll(queryForPeers());
+        //    continue;
+        //}
 
         // send peer1 k xa dosttt
         if ((cm == "send" && commands.size() > 2) || (cm == "echo" && commands.size() > 1)) {
@@ -212,7 +219,7 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
 }
 
 
-void PeerClient::queryForPeers()
+std::string PeerClient::queryForPeers()
 {
     auto socket = connectTo("127.0.0.1", "55555", clientContext);
     sendMessageToServer(socket, _username + "\n");
@@ -236,28 +243,46 @@ void PeerClient::queryForPeers()
     if (endPos != std::string::npos) {
         response = response.substr(0, endPos);
     }
-
-    ClientLogger.log("Peer List:\n" + response + "\n");
     disconnectFrom(socket);
+    return response;
+}
+
+
+void PeerClient::connectToAll(std::string list)
+{
+    std::stringstream stream(list);
+    std::string name;
+    std::vector < std::string> p_l;
+    while (std::getline(stream, name)) {
+        
+        if(name!=_username){
+            std::cout << "Line: " << name << std::endl;
+            p_l.push_back(name);
+        }
+    }
+
+    for (auto p : p_l) {
+        requestConnection(p);
+    }
 }
 
 
 void PeerClient::requestConnection(std::string connect_to)
 {
+
+    std::vector<std::pair<std::string, std::string>> all_nodes;
+
     auto socket = connectTo("127.0.0.1", "55555", clientContext);
     sendMessageToServer(socket, _username + "\n");
     sendMessageToServer(socket, "conn_request|" + connect_to + "\n");
 
+
     char reply[1024];
     size_t reply_length = socket.read_some(boost::asio::buffer(reply));
     std::string str(reply, reply_length);
-    ClientLogger.log("Message Received from server!");
-    ClientLogger.log(str);
 
     std::istringstream stream(str);
-
     std::string ip;
-
     std::getline(stream, ip, ':');
     std::string port;
     std::getline(stream, port, ' ');
@@ -271,7 +296,7 @@ void PeerClient::requestConnection(std::string connect_to)
     auto endpoints = resolver.resolve(ip, port);
     tcp::socket privateSocket(clientContext);
 
-    ClientLogger.log("Attempting connectinon to  " + ip + ":" + port);
+    ClientLogger.log("Attempting connectinon to  "+connect_to+ " at " + ip + ":" + port);
     try
     {
         boost::asio::connect(privateSocket, endpoints);
@@ -282,11 +307,6 @@ void PeerClient::requestConnection(std::string connect_to)
     catch (const std::exception& e) {
         std::cerr << "Peer connection failed : " << e.what() << std::endl;
     }
-    ClientLogger.log("Okay it works fine ig");
-
-
-
-
 
     boost::asio::co_spawn(clientContext,
         PeerClient::CommWithPeers(std::move(privateSocket), connect_to),
@@ -295,6 +315,7 @@ void PeerClient::requestConnection(std::string connect_to)
 
 
 }
+
 
 
 

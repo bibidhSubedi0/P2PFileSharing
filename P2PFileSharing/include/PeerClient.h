@@ -45,12 +45,13 @@ public:
 
 	void mainLoop();
 
-	void queryForPeers();
+	std::string queryForPeers();
 
 	void sendMessageToServer(tcp::socket&, std::string);
 	void sendMessageToPeers(const std::string& , const std::vector<std::string>&, const std::string&);
 
 	void requestConnection(std::string); // Only usename is enough? IDK
+	void connectToAll(std::string);
 
 	boost::asio::awaitable<void> CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string);
 	
