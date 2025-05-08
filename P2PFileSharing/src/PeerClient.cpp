@@ -100,8 +100,12 @@ void PeerClient::mainLoop()
             continue;
             
         }
-        if ((cm == "send" && commands.size() > 2)){
-            sendMessageToPeers(commands[1], msg);
+        if ((cm == "send")){
+            size_t pos = msg.find(' ');
+            msg = msg.substr(pos + 1);
+            pos = msg.find(' ');
+            msg = msg.substr(pos + 1);
+            sendMessageToPeers(commands[1], "TEXTMSG:"+msg);
             continue;
         }
 
@@ -395,6 +399,15 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
 
             // Farming
             while (true) {
+
+                std::size_t msg_pos = buffer.find("TEXTMSG:");
+                if (msg_pos != std::string::npos) {
+                    std::string textMsg = buffer.substr(msg_pos + 8); // skip "TEXTMSG:"
+                    ClientLogger.log("Received text message from peer: " + key + " => " + textMsg);
+
+                    // After receiving TEXTMSG, we consider communication over
+                    break;
+                }
 
                 // find the position of cmd meta and data 
                 std::size_t cmd_pos = buffer.find("CMD:");
