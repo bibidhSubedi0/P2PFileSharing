@@ -4,6 +4,8 @@
 #include <boost/asio/ip/address_v4.hpp>
 #include <sstream>
 #include<queue>
+#include <format>
+#include <filesystem>
 #include <utils.h>
 /*
 
@@ -98,8 +100,8 @@ void PeerClient::mainLoop()
             continue;
             
         }
-        if ((cm == "send" && commands.size() > 2) || (cm == "echo" && commands.size() > 1)) {
-            sendMessageToPeers(cm, commands, msg);
+        if ((cm == "send" && commands.size() > 2)){
+            sendMessageToPeers(commands[1], msg);
             continue;
         }
 
@@ -122,51 +124,91 @@ void PeerClient::readFilesFromPc(std::string path)
     std::replace(path.begin(), path.end(), '\\', '/');
 
     ClientLogger.log("Reading from " + path);
+
+    //FileHandling::makeBinaryChunks(path,_username);
     
-    FileHandling::makeBinaryChunks(path,_username);
-    
+    size_t chunkSize = 1024; // 1KB for now
+
     // Send the binary cunks inside the username/ folder to other peers
 
-}
 
+    {
+        std::ifstream file(path, std::ios::binary);
+        if (!file) throw std::runtime_error("Cannot open input file.");
 
-void PeerClient::sendMessageToPeers(const std::string& cm, const std::vector<std::string>& commands, const std::string& msg) {
-    if (cm == "send" && commands.size() > 2) {
-        const std::string& target = commands[1];
-        std::string content = msg.substr(msg.find(target) + target.length() + 1);
+        int index = 0;
+        std::vector<std::string> peer_names;
+        while (!file.eof()) {
 
-        std::shared_ptr<tcp::socket> peerSocket;
-        {
-            std::lock_guard<std::mutex> lock(_peerMutex);
-            for (const auto& [key, socket] : _connectedPeers) {
-                if (key.rfind(target + "@", 0) == 0) {  // peer name match
-                    peerSocket = socket;
-                    break;
+            //std::vector<char> buffer(chunkSize); // reading with vector of characters
+            std::string buffer(chunkSize, '\0');  
+            file.read(&buffer[0], chunkSize);
+            std::streamsize bytesRead = file.gcount();
+
+            if (bytesRead == 0) break; // nothing read
+
+            std::string chunkName = "chunk_" + std::to_string(index++);
+
+            // sendhing the chunks to all possible peers
+            // key is peerx@192.168.1.1:56200
+            
+            
+            // inform about the 
+            {
+                std::lock_guard<std::mutex> lock(_peerMutex);
+                for (const auto& [key, socket] : _connectedPeers) {
+                    size_t at_pos = key.find('@');
+                    std::string peer_name = key.substr(0, at_pos);
+                    
+                    peer_names.push_back(peer_name);
+
                 }
             }
+
+
+            for (const auto& peer_name : peer_names) {
+                sendMessageToPeers(peer_name, "CMD:__file_Packet__");
+                sendMessageToPeers(peer_name, "META:" + chunkName);
+                sendMessageToPeers(peer_name, "DATA:" + buffer.substr(0, bytesRead));
+            }
+
+        }
+        for (const auto& peer_name : peer_names) {
+            sendMessageToPeers(peer_name, "CMD:__file_Complete__");
         }
 
-        if (peerSocket && peerSocket->is_open()) {
-            boost::asio::write(*peerSocket, boost::asio::buffer(content));
-        }
-        else {
-            ClientLogger.log("Peer not connected: " + target);
-        }
     }
 
-    else if (cm == "echo" && commands.size() > 1) {
-        std::lock_guard<std::mutex> lock(_peerMutex);
-        for (auto& [name, socket_ptr] : _connectedPeers) {
-            try {
-                boost::asio::write(*socket_ptr, boost::asio::buffer(msg + "\n"));
-            }
-            catch (const std::exception& e) {
-                ClientLogger.log("Failed to send to " + name + ": " + e.what());
-            }
-        }
-    }
 }
 
+
+void PeerClient::sendMessageToPeers(const std::string& cm, const std::string& msg) 
+{
+    
+    const std::string& target = cm;
+    std::string content = msg;
+
+    std::shared_ptr<tcp::socket> peerSocket;
+    {
+        std::lock_guard<std::mutex> lock(_peerMutex);
+        for (const auto& [key, socket] : _connectedPeers) {
+            if (key.rfind(target 
+                + "@", 0) == 0) {  // peer name match
+                peerSocket = socket;
+                break;
+            }
+        }
+    }
+
+    if (peerSocket && peerSocket->is_open()) {
+        boost::asio::write(*peerSocket, boost::asio::buffer(content));
+    }
+    else {
+        ClientLogger.log("Peer not connected: " + target);
+    }
+
+    
+}
 
 
 boost::asio::awaitable<void> PeerClient::listenForPeers() {
@@ -230,8 +272,6 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
         std::cerr << "Peer acceptor exception: " << e.what() << "\n";
     }
 }
-
-
 
 
 std::string PeerClient::queryForPeers()
@@ -333,11 +373,8 @@ void PeerClient::requestConnection(std::string connect_to)
 
 
 boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string username) {
-    
     try {
         auto remote_ep = peer_socket.remote_endpoint();
-
-        // Key will be in form of peerx@192.168.1.1:56200
         std::string key = username + "@" + remote_ep.address().to_string() + ":" + std::to_string(remote_ep.port());
 
         {
@@ -346,17 +383,81 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
         }
 
         ClientLogger.log("Connected to peer: " + key);
-        
-        
-        for (;;) {
-            char data[1024];
-            size_t length = co_await _connectedPeers[key]->async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
-            std::string message(data, length);
-            ClientLogger.log(key + ": " + message);
-    
-            // Handle peer message here (e.g., echo it back or process the data)
 
+        std::string buffer;
+        char data[2048];
+
+        bool file_transfer_complete = false; // Flag to track file transfer completion
+
+        while (true) {
+            std::size_t length = co_await _connectedPeers[key]->async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
+            buffer.append(data, length);
+
+            // Farming
+            while (true) {
+
+                // find the position of cmd meta and data 
+                std::size_t cmd_pos = buffer.find("CMD:");
+                std::size_t meta_pos = buffer.find("META:");
+                std::size_t data_pos = buffer.find("DATA:");
+
+                // Identify the earliest known header
+                // header -> {(pos,"CMD:"),... }
+                std::vector<std::pair<std::size_t, std::string>> headers;
+                if (cmd_pos != std::string::npos) headers.emplace_back(cmd_pos, "CMD:");
+                if (meta_pos != std::string::npos) headers.emplace_back(meta_pos, "META:");
+                if (data_pos != std::string::npos) headers.emplace_back(data_pos, "DATA:");
+
+                if (headers.empty()) break;
+
+                std::sort(headers.begin(), headers.end()); // sort by position
+                auto [start, type] = headers.front();      // get earliest marker
+
+                // Wait for next header to determine where this one ends
+                std::size_t next_start = std::string::npos;
+                for (const auto& [pos, header] : headers) {
+                    if (pos > start) {
+                        next_start = pos;
+                        break;
+                    }
+                }
+
+                if (next_start == std::string::npos) {
+                    // Incomplete message, wait for more data
+                    break;
+                }
+
+                std::string message = buffer.substr(start, next_start - start);
+                buffer.erase(0, next_start);
+
+                // Process the message
+                if (type == "CMD:") {
+                    std::string cmd = message.substr(4);
+                    ClientLogger.log("Received control message: " + cmd);
+
+                    if (cmd == "__file_Complete__") {
+                        ClientLogger.log("File transfer complete from peer: " + key);
+                        file_transfer_complete = true; // Mark file transfer as complete
+                        break;
+                    }
+                }
+                else if (type == "META:") {
+                    std::string chunkName = message.substr(5);
+                    ClientLogger.log("Received chunk name: " + chunkName);
+                }
+                else if (type == "DATA:") {
+                    std::string chunkData = message.substr(5);
+                    ClientLogger.log("Received chunk data of size: " + std::to_string(chunkData.size()));
+                    ClientLogger.log("-----------------------------x--------------------------\n" +chunkData);
+                    ClientLogger.log("-----------------------------x--------------------------");
+
+                    if (file_transfer_complete) {
+                        ClientLogger.log("Ignoring additional data after file completion.");
+                    }
+                }
+            }
         }
+
     }
     catch (const std::exception& e) {
         std::cerr << "Peer communication failed: " << e.what() << std::endl;

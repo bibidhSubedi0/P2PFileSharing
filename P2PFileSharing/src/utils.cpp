@@ -54,7 +54,7 @@ int FileHandling::makeBinaryChunks(const std::string& filename,  std::string dir
             std::streamsize bytesRead = file.gcount();
 
             if (bytesRead == 0) break; // nothing read
-
+        
             std::string chunkName = outputDir + "/chunk_" + std::to_string(index++) +".txt";
             std::ofstream out(chunkName, std::ios::binary);
             if (!out) throw std::runtime_error("Cannot create chunk file.");

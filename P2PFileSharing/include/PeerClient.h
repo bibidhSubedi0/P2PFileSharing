@@ -48,7 +48,7 @@ public:
 	std::string queryForPeers();
 
 	void sendMessageToServer(tcp::socket&, std::string);
-	void sendMessageToPeers(const std::string& , const std::vector<std::string>&, const std::string&);
+	void sendMessageToPeers(const std::string&, const std::string&);
 
 	void requestConnection(std::string); // Only usename is enough? IDK
 	void connectToAll(std::string);
