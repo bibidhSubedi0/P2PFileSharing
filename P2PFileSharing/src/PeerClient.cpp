@@ -4,6 +4,7 @@
 #include <boost/asio/ip/address_v4.hpp>
 #include <sstream>
 #include<queue>
+#include <utils.h>
 /*
 
 
@@ -66,7 +67,6 @@ PeerClient::PeerClient(std::string username)
 
 void PeerClient::mainLoop()
 {
-    ClientLogger.log("Started the io thread");
     for (;;) {
         std::string msg;
         std::getline(std::cin, msg);
@@ -92,16 +92,12 @@ void PeerClient::mainLoop()
             ClientLogger.log("Peer List:\n" + list);
             continue;
         }
-        //if (cm == "connect" && commands.size() > 1) {
-        //    requestConnection(commands[1]);
-        //    continue;
-        //}
-        //if (cm == "connect" && commands.size() == 1) {
-        //    connectToAll(queryForPeers());
-        //    continue;
-        //}
 
-        // send peer1 k xa dosttt
+        if (cm == "upload") {
+            readFilesFromPc(msg);
+            continue;
+            
+        }
         if ((cm == "send" && commands.size() > 2) || (cm == "echo" && commands.size() > 1)) {
             sendMessageToPeers(cm, commands, msg);
             continue;
@@ -116,6 +112,23 @@ void PeerClient::mainLoop()
 
     }
 }
+
+
+
+void PeerClient::readFilesFromPc(std::string path)
+{
+    size_t pos = path.find(' ');
+    path = path.substr(pos + 1);
+    std::replace(path.begin(), path.end(), '\\', '/');
+
+    ClientLogger.log("Reading from " + path);
+    
+    FileHandling::makeBinaryChunks(path,_username);
+    
+    // Send the binary cunks inside the username/ folder to other peers
+
+}
+
 
 void PeerClient::sendMessageToPeers(const std::string& cm, const std::vector<std::string>& commands, const std::string& msg) {
     if (cm == "send" && commands.size() > 2) {
@@ -219,6 +232,8 @@ boost::asio::awaitable<void> PeerClient::listenForPeers() {
 }
 
 
+
+
 std::string PeerClient::queryForPeers()
 {
     auto socket = connectTo("127.0.0.1", "55555", clientContext);
@@ -317,11 +332,6 @@ void PeerClient::requestConnection(std::string connect_to)
 }
 
 
-
-
-
-
-
 boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string username) {
     
     try {
@@ -344,9 +354,9 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
             std::string message(data, length);
             ClientLogger.log(key + ": " + message);
     
-        // Handle peer message here (e.g., echo it back or process the data)
-    
-    }
+            // Handle peer message here (e.g., echo it back or process the data)
+
+        }
     }
     catch (const std::exception& e) {
         std::cerr << "Peer communication failed: " << e.what() << std::endl;

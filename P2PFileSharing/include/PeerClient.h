@@ -56,4 +56,6 @@ public:
 	boost::asio::awaitable<void> CommWithPeers(boost::asio::ip::tcp::socket peer_socket, std::string);
 	
 	boost::asio::awaitable<void> listenForPeers();
+
+	void readFilesFromPc(std::string);
 };

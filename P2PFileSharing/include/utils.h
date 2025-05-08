@@ -96,7 +96,7 @@ namespace Peers {
 
 namespace FileHandling
 {
-    int makeBinaryChunks(const std::string& filename, std::size_t chunkSize = 20);
+    int makeBinaryChunks(const std::string& filename, std::string dirName, std::size_t chunkSize = 20);
 
     void reconstructFile(const std::string& outputFilename, int chunkCount);
 
