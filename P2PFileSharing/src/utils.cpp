@@ -2,6 +2,7 @@
 #include "../include/utils.h"
 #include <chrono>
 #include <format>
+#include <filesystem>
 
 namespace logger
 {
@@ -36,8 +37,12 @@ Peers::PeerInfo::PeerInfo(std::string ip, unsigned short p, std::string username
     last_active = std::chrono::system_clock::now();
 }
 
-int FileHandling::makeBinaryChunks(const std::string& filename, std::size_t chunkSize)
+int FileHandling::makeBinaryChunks(const std::string& filename,  std::string dirName,std::size_t chunkSize)
 {
+    const std::string outputDir = dirName;
+    if (!std::filesystem::exists(outputDir)) {
+        std::filesystem::create_directory(outputDir);
+    }
     {
         std::ifstream file(filename, std::ios::binary);
         if (!file) throw std::runtime_error("Cannot open input file.");
@@ -49,8 +54,8 @@ int FileHandling::makeBinaryChunks(const std::string& filename, std::size_t chun
             std::streamsize bytesRead = file.gcount();
 
             if (bytesRead == 0) break; // nothing read
-
-            std::string chunkName = "chunk_" + std::to_string(index++);
+        
+            std::string chunkName = outputDir + "/chunk_" + std::to_string(index++) +".txt";
             std::ofstream out(chunkName, std::ios::binary);
             if (!out) throw std::runtime_error("Cannot create chunk file.");
 
