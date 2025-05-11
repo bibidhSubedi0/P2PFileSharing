@@ -119,8 +119,6 @@ void PeerClient::mainLoop()
     }
 }
 
-
-
 void PeerClient::readFilesFromPc(std::string path)
 {
     size_t pos = path.find(' ');
@@ -133,8 +131,19 @@ void PeerClient::readFilesFromPc(std::string path)
     
     size_t chunkSize = 1024; // 1KB for now
 
+    std::vector<std::string> peer_names;
     // Send the binary cunks inside the username/ folder to other peers
+    // inform about the
+    {
+        std::lock_guard<std::mutex> lock(_peerMutex);
+        for (const auto& [key, socket] : _connectedPeers) {
+            size_t at_pos = key.find('@');
+            std::string peer_name = key.substr(0, at_pos);
 
+            peer_names.push_back(peer_name);
+
+        }
+    }
 
     {
         std::ifstream file(path, std::ios::binary);
@@ -157,17 +166,6 @@ void PeerClient::readFilesFromPc(std::string path)
             // key is peerx@192.168.1.1:56200
             
             
-            // inform about the 
-            {
-                std::lock_guard<std::mutex> lock(_peerMutex);
-                for (const auto& [key, socket] : _connectedPeers) {
-                    size_t at_pos = key.find('@');
-                    std::string peer_name = key.substr(0, at_pos);
-                    
-                    peer_names.push_back(peer_name);
-
-                }
-            }
 
 
             for (const auto& peer_name : peer_names) {
@@ -184,6 +182,7 @@ void PeerClient::readFilesFromPc(std::string path)
     }
 
 }
+
 
 
 void PeerClient::sendMessageToPeers(const std::string& cm, const std::string& msg) 
@@ -390,9 +389,8 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
 
         std::string buffer;
         char data[2048];
-
-        bool file_transfer_complete = false; // Flag to track file transfer completion
-
+        
+        int x = 0;
         while (true) {
             std::size_t length = co_await _connectedPeers[key]->async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
             buffer.append(data, length);
@@ -400,33 +398,48 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
             // Farming
             while (true) {
 
+
+                // Just to check if it is a text message
                 std::size_t msg_pos = buffer.find("TEXTMSG:");
                 if (msg_pos != std::string::npos) {
                     std::string textMsg = buffer.substr(msg_pos + 8); // skip "TEXTMSG:"
                     ClientLogger.log("Received text message from peer: " + key + " => " + textMsg);
-
-                    // After receiving TEXTMSG, we consider communication over
+                    buffer.clear();
+                    // After receiving TEXTMSG, farming is complete for now
+                    // can this interfer with with the packets sent during the file upload? yes
+                    // am i a fucking security engineer? no
                     break;
                 }
+
+
 
                 // find the position of cmd meta and data 
                 std::size_t cmd_pos = buffer.find("CMD:");
                 std::size_t meta_pos = buffer.find("META:");
                 std::size_t data_pos = buffer.find("DATA:");
-
                 // Identify the earliest known header
-                // header -> {(pos,"CMD:"),... }
+                // header -> {(pos,"CMD:"), ... }
                 std::vector<std::pair<std::size_t, std::string>> headers;
                 if (cmd_pos != std::string::npos) headers.emplace_back(cmd_pos, "CMD:");
                 if (meta_pos != std::string::npos) headers.emplace_back(meta_pos, "META:");
                 if (data_pos != std::string::npos) headers.emplace_back(data_pos, "DATA:");
 
+
+                // If absoutely nothing is recived, the go back to listening
+                // Although why would we reach here if we got nothing from the listner
                 if (headers.empty()) break;
 
-                std::sort(headers.begin(), headers.end()); // sort by position
-                auto [start, type] = headers.front();      // get earliest marker
+                std::sort(headers.begin(),headers.end()); // sort by position
+                auto [start, type] = headers.front();      // get earliest marker ideally should be CMD
 
-                // Wait for next header to determine where this one ends
+                // okay so basically
+                // first buffer = "CMD:__dsfsdf__"
+                // start = 0, type = CMD, next_start = npos
+                // inside loop
+                // 0>0? nop then loop ends
+
+                // second time in th buffer = "CND:__ddsfds__META:42"
+                // pos = 3, then next start =3
                 std::size_t next_start = std::string::npos;
                 for (const auto& [pos, header] : headers) {
                     if (pos > start) {
@@ -435,13 +448,17 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
                     }
                 }
 
+                // then next start  will be npos so break
                 if (next_start == std::string::npos) {
-                    // Incomplete message, wait for more data
+                    // incomplete message wait for more data
                     break;
                 }
 
+
                 std::string message = buffer.substr(start, next_start - start);
-                buffer.erase(0, next_start);
+                buffer.erase(start, next_start - start);
+
+
 
                 // Process the message
                 if (type == "CMD:") {
@@ -450,7 +467,7 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
 
                     if (cmd == "__file_Complete__") {
                         ClientLogger.log("File transfer complete from peer: " + key);
-                        file_transfer_complete = true; // Mark file transfer as complete
+                        ClientLogger.log("Ignoring additional data after file completion.");
                         break;
                     }
                 }
@@ -461,12 +478,10 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
                 else if (type == "DATA:") {
                     std::string chunkData = message.substr(5);
                     ClientLogger.log("Received chunk data of size: " + std::to_string(chunkData.size()));
-                    ClientLogger.log("-----------------------------x--------------------------\n" +chunkData);
-                    ClientLogger.log("-----------------------------x--------------------------");
+                    //ClientLogger.log("-----------------------------x--------------------------\n" +chunkData);
+                    //ClientLogger.log("-----------------------------x--------------------------");
 
-                    if (file_transfer_complete) {
-                        ClientLogger.log("Ignoring additional data after file completion.");
-                    }
+                    
                 }
             }
         }
@@ -476,3 +491,5 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
         std::cerr << "Peer communication failed: " << e.what() << std::endl;
     }
 }
+
+
