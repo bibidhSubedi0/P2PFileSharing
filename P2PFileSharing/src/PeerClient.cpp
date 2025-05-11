@@ -127,60 +127,41 @@ void PeerClient::readFilesFromPc(std::string path)
 
     ClientLogger.log("Reading from " + path);
 
-    //FileHandling::makeBinaryChunks(path,_username);
-    
     size_t chunkSize = 1024; // 1KB for now
 
     std::vector<std::string> peer_names;
-    // Send the binary cunks inside the username/ folder to other peers
-    // inform about the
     {
         std::lock_guard<std::mutex> lock(_peerMutex);
         for (const auto& [key, socket] : _connectedPeers) {
             size_t at_pos = key.find('@');
             std::string peer_name = key.substr(0, at_pos);
-
             peer_names.push_back(peer_name);
-
         }
     }
 
-    {
-        std::ifstream file(path, std::ios::binary);
-        if (!file) throw std::runtime_error("Cannot open input file.");
+    std::ifstream file(path, std::ios::binary);
+    if (!file) throw std::runtime_error("Cannot open input file.");
 
-        int index = 0;
-        std::vector<std::string> peer_names;
-        while (!file.eof()) {
+    int index = 0;
+    while (!file.eof()) {
+        std::string buffer(chunkSize, '\0');
+        file.read(&buffer[0], chunkSize);
+        std::streamsize bytesRead = file.gcount();
 
-            //std::vector<char> buffer(chunkSize); // reading with vector of characters
-            std::string buffer(chunkSize, '\0');  
-            file.read(&buffer[0], chunkSize);
-            std::streamsize bytesRead = file.gcount();
+        if (bytesRead == 0) break; 
 
-            if (bytesRead == 0) break; // nothing read
+        std::string chunkName = "chunk_" + std::to_string(index++);
 
-            std::string chunkName = "chunk_" + std::to_string(index++);
-
-            // sendhing the chunks to all possible peers
-            // key is peerx@192.168.1.1:56200
-            
-            
-
-
-            for (const auto& peer_name : peer_names) {
-                sendMessageToPeers(peer_name, "CMD:__file_Packet__");
-                sendMessageToPeers(peer_name, "META:" + chunkName);
-                sendMessageToPeers(peer_name, "DATA:" + buffer.substr(0, bytesRead));
-            }
-
-        }
         for (const auto& peer_name : peer_names) {
-            sendMessageToPeers(peer_name, "CMD:__file_Complete__");
+            sendMessageToPeers(peer_name, "CMD:__file_Packet__");
+            sendMessageToPeers(peer_name, "META:" + chunkName);
+            sendMessageToPeers(peer_name, "DATA:" + buffer.substr(0, bytesRead));
         }
-
     }
 
+    for (const auto& peer_name : peer_names) {
+        sendMessageToPeers(peer_name, "CMD:__file_Complete__");
+    }
 }
 
 
