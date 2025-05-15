@@ -7,11 +7,8 @@
 #include <format>
 #include <filesystem>
 #include <utils.h>
-/*
 
 
-
-*/
 void PeerClient::sendMessageToServer(tcp::socket& socket, std::string message)
 {
     boost::asio::write(socket, boost::asio::buffer(message));
@@ -154,14 +151,19 @@ void PeerClient::readFilesFromPc(std::string path)
 
         for (const auto& peer_name : peer_names) {
             sendMessageToPeers(peer_name, "CMD:__file_Packet__");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             sendMessageToPeers(peer_name, "META:" + chunkName);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             sendMessageToPeers(peer_name, "DATA:" + buffer.substr(0, bytesRead));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
     for (const auto& peer_name : peer_names) {
         sendMessageToPeers(peer_name, "CMD:__file_Complete__");
     }
+
+    ClientLogger.log("File transfer complete!");
 }
 
 
@@ -191,7 +193,6 @@ void PeerClient::sendMessageToPeers(const std::string& cm, const std::string& ms
         ClientLogger.log("Peer not connected: " + target);
     }
 
-    
 }
 
 
@@ -408,10 +409,24 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
 
                 // If absoutely nothing is recived, the go back to listening
                 // Although why would we reach here if we got nothing from the listner
+
                 if (headers.empty()) break;
 
                 std::sort(headers.begin(),headers.end()); // sort by position
                 auto [start, type] = headers.front();      // get earliest marker ideally should be CMD
+
+                // Calculate the length of this message
+                std::size_t msg_length;
+                if (headers.size() > 1) {
+                    msg_length = headers[1].first - start;
+                }
+                else {
+                    // If this is the last header, process until the end of buffer
+                    msg_length = buffer.length() - start;
+                }
+
+                std::string message = buffer.substr(start, msg_length);
+                buffer.erase(start, msg_length);
 
                 // okay so basically
                 // first buffer = "CMD:__dsfsdf__"
@@ -421,25 +436,29 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
 
                 // second time in th buffer = "CND:__ddsfds__META:42"
                 // pos = 3, then next start =3
-                std::size_t next_start = std::string::npos;
-                for (const auto& [pos, header] : headers) {
-                    if (pos > start) {
-                        next_start = pos;
-                        break;
-                    }
-                }
+                //std::size_t next_start = std::string::npos;
+                //for (const auto& [pos, header] : headers) {
+                //    if (pos > start) {
+                //        next_start = pos;
+                //        break;
+                //    }
+                //}
 
-                // then next start  will be npos so break
-                if (next_start == std::string::npos) {
-                    // incomplete message wait for more data
-                    break;
-                }
+                //// then next start  will be npos so break
+                //if (next_start == std::string::npos ) {
+                //    // incomplete message wait for more data
+                //    break;
+                //}
+
+                
+
+                ClientLogger.log("---------------------------------------> " + type);
 
 
-                std::string message = buffer.substr(start, next_start - start);
-                buffer.erase(start, next_start - start);
+                //std::string message = buffer.substr(start, next_start - start);
+                //buffer.erase(start, next_start - start);
 
-
+                if (buffer.empty()) break;
 
                 // Process the message
                 if (type == "CMD:") {
@@ -454,17 +473,15 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
                 }
                 else if (type == "META:") {
                     std::string chunkName = message.substr(5);
-                    ClientLogger.log("Received chunk name: " + chunkName);
                 }
                 else if (type == "DATA:") {
                     std::string chunkData = message.substr(5);
-                    ClientLogger.log("Received chunk data of size: " + std::to_string(chunkData.size()));
-                    //ClientLogger.log("-----------------------------x--------------------------\n" +chunkData);
-                    //ClientLogger.log("-----------------------------x--------------------------");
 
                     
                 }
             }
+        
+            
         }
 
     }
