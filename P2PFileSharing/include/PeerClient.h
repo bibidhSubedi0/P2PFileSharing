@@ -13,7 +13,9 @@
 #include <vector>
 #include <string>
 #include <csignal>
-
+#include <fstream>
+#include <filesystem>
+#include <map>
 #include "utils.h"
 
 using boost::asio::ip::tcp;
@@ -57,5 +59,18 @@ public:
 	
 	boost::asio::awaitable<void> listenForPeers();
 
+	struct FileTransfer {
+		std::string filename;
+		std::map<std::string, std::string> chunks; // chunkName -> data
+		int totalChunks = 0;
+	};
+
 	void readFilesFromPc(std::string);
+	std::map<std::string, FileTransfer> _activeTransfers; // key -> transfer
+	std::mutex _transferMutex;
+
+
+
+
+	
 };

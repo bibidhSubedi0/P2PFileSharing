@@ -116,15 +116,18 @@ void PeerClient::mainLoop()
     }
 }
 
-void PeerClient::readFilesFromPc(std::string path)
-{
+void PeerClient::readFilesFromPc(std::string path) {
     size_t pos = path.find(' ');
     path = path.substr(pos + 1);
     std::replace(path.begin(), path.end(), '\\', '/');
 
     ClientLogger.log("Reading from " + path);
 
-    size_t chunkSize = 1024; // 1KB for now
+    // Extract filename
+    std::filesystem::path fsPath(path);
+    std::string filename = fsPath.filename().string();
+
+    size_t chunkSize = 1024;
 
     std::vector<std::string> peer_names;
     {
@@ -137,7 +140,18 @@ void PeerClient::readFilesFromPc(std::string path)
     }
 
     std::ifstream file(path, std::ios::binary);
-    if (!file) throw std::runtime_error("Cannot open input file.");
+    if (!file) {
+        ClientLogger.log("Cannot open file: " + path);
+        return;
+    }
+
+    // Send filename metadata first
+    for (const auto& peer_name : peer_names) {
+        sendMessageToPeers(peer_name, "CMD:__file_Start__");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        sendMessageToPeers(peer_name, "FILENAME:" + filename);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
 
     int index = 0;
     while (!file.eof()) {
@@ -145,17 +159,17 @@ void PeerClient::readFilesFromPc(std::string path)
         file.read(&buffer[0], chunkSize);
         std::streamsize bytesRead = file.gcount();
 
-        if (bytesRead == 0) break; 
+        if (bytesRead == 0) break;
 
         std::string chunkName = "chunk_" + std::to_string(index++);
 
         for (const auto& peer_name : peer_names) {
             sendMessageToPeers(peer_name, "CMD:__file_Packet__");
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
             sendMessageToPeers(peer_name, "META:" + chunkName);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
             sendMessageToPeers(peer_name, "DATA:" + buffer.substr(0, bytesRead));
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     }
 
@@ -163,7 +177,7 @@ void PeerClient::readFilesFromPc(std::string path)
         sendMessageToPeers(peer_name, "CMD:__file_Complete__");
     }
 
-    ClientLogger.log("File transfer complete!");
+    ClientLogger.log("File transfer complete! Sent " + std::to_string(index) + " chunks");
 }
 
 
@@ -369,125 +383,127 @@ boost::asio::awaitable<void> PeerClient::CommWithPeers(boost::asio::ip::tcp::soc
 
         ClientLogger.log("Connected to peer: " + key);
 
+        // Create user's download folder
+        std::string userFolder = "downloads_" + _username + "/" + username;
+        std::filesystem::create_directories(userFolder);
+
         std::string buffer;
         char data[2048];
-        
-        int x = 0;
+
+        std::string currentChunkName;
+        std::string currentFilename;
+        bool receivingFile = false;
+
         while (true) {
-            std::size_t length = co_await _connectedPeers[key]->async_read_some(boost::asio::buffer(data), boost::asio::use_awaitable);
+            std::size_t length = co_await _connectedPeers[key]->async_read_some(
+                boost::asio::buffer(data), boost::asio::use_awaitable);
             buffer.append(data, length);
 
-            // Farming
             while (true) {
-
-
-                // Just to check if it is a text message
+                // Check for text messages
                 std::size_t msg_pos = buffer.find("TEXTMSG:");
                 if (msg_pos != std::string::npos) {
-                    std::string textMsg = buffer.substr(msg_pos + 8); // skip "TEXTMSG:"
-                    ClientLogger.log("Received text message from peer: " + key + " => " + textMsg);
+                    std::string textMsg = buffer.substr(msg_pos + 8);
+                    ClientLogger.log("Received text from " + username + ": " + textMsg);
                     buffer.clear();
-                    // After receiving TEXTMSG, farming is complete for now
-                    // can this interfer with with the packets sent during the file upload? yes
-                    // am i a fucking security engineer? no
                     break;
                 }
 
-
-
-                // find the position of cmd meta and data 
+                // Find headers
                 std::size_t cmd_pos = buffer.find("CMD:");
                 std::size_t meta_pos = buffer.find("META:");
                 std::size_t data_pos = buffer.find("DATA:");
-                // Identify the earliest known header
-                // header -> {(pos,"CMD:"), ... }
+
                 std::vector<std::pair<std::size_t, std::string>> headers;
                 if (cmd_pos != std::string::npos) headers.emplace_back(cmd_pos, "CMD:");
                 if (meta_pos != std::string::npos) headers.emplace_back(meta_pos, "META:");
                 if (data_pos != std::string::npos) headers.emplace_back(data_pos, "DATA:");
 
-
-                // If absoutely nothing is recived, the go back to listening
-                // Although why would we reach here if we got nothing from the listner
-
                 if (headers.empty()) break;
 
-                std::sort(headers.begin(),headers.end()); // sort by position
-                auto [start, type] = headers.front();      // get earliest marker ideally should be CMD
+                std::sort(headers.begin(), headers.end());
+                auto [start, type] = headers.front();
 
-                // Calculate the length of this message
                 std::size_t msg_length;
                 if (headers.size() > 1) {
                     msg_length = headers[1].first - start;
                 }
                 else {
-                    // If this is the last header, process until the end of buffer
                     msg_length = buffer.length() - start;
                 }
 
                 std::string message = buffer.substr(start, msg_length);
-                buffer.erase(start, msg_length);
+                buffer.erase(0, start + msg_length);
 
-                // okay so basically
-                // first buffer = "CMD:__dsfsdf__"
-                // start = 0, type = CMD, next_start = npos
-                // inside loop
-                // 0>0? nop then loop ends
-
-                // second time in th buffer = "CND:__ddsfds__META:42"
-                // pos = 3, then next start =3
-                //std::size_t next_start = std::string::npos;
-                //for (const auto& [pos, header] : headers) {
-                //    if (pos > start) {
-                //        next_start = pos;
-                //        break;
-                //    }
-                //}
-
-                //// then next start  will be npos so break
-                //if (next_start == std::string::npos ) {
-                //    // incomplete message wait for more data
-                //    break;
-                //}
-
-                
-
-                ClientLogger.log("---------------------------------------> " + type);
-
-
-                //std::string message = buffer.substr(start, next_start - start);
-                //buffer.erase(start, next_start - start);
-
-                if (buffer.empty()) break;
-
-                // Process the message
+                // Process messages
                 if (type == "CMD:") {
                     std::string cmd = message.substr(4);
-                    ClientLogger.log("Received control message: " + cmd);
 
-                    if (cmd == "__file_Complete__") {
-                        ClientLogger.log("File transfer complete from peer: " + key);
-                        ClientLogger.log("Ignoring additional data after file completion.");
+                    if (cmd == "__file_Packet__") {
+                        receivingFile = true;
+                        ClientLogger.log("Starting file reception from " + username);
+                    }
+                    else if (cmd == "__file_Complete__") {
+                        if (receivingFile) {
+                            // Reconstruct file
+                            std::string transferKey = username + "_transfer";
+                            FileTransfer& transfer = _activeTransfers[transferKey];
+
+                            std::string outputPath = userFolder + "/received_file.bin";
+                            std::ofstream outFile(outputPath, std::ios::binary);
+
+                            if (outFile) {
+                                // Sort and write chunks in order
+                                for (int i = 0; i < transfer.totalChunks; ++i) {
+                                    std::string chunkKey = "chunk_" + std::to_string(i);
+                                    if (transfer.chunks.count(chunkKey)) {
+                                        outFile.write(transfer.chunks[chunkKey].data(),
+                                            transfer.chunks[chunkKey].size());
+                                    }
+                                }
+                                outFile.close();
+                                ClientLogger.log("File saved to: " + outputPath);
+                            }
+
+                            // Clean up
+                            _activeTransfers.erase(transferKey);
+                            receivingFile = false;
+                        }
                         break;
                     }
                 }
                 else if (type == "META:") {
-                    std::string chunkName = message.substr(5);
+                    currentChunkName = message.substr(5);
+                    ClientLogger.log("Receiving chunk: " + currentChunkName);
                 }
                 else if (type == "DATA:") {
                     std::string chunkData = message.substr(5);
 
-                    
-                }
-            }
-        
-            
-        }
+                    if (receivingFile && !currentChunkName.empty()) {
+                        std::string transferKey = username + "_transfer";
+                        std::lock_guard<std::mutex> lock(_transferMutex);
 
+                        _activeTransfers[transferKey].chunks[currentChunkName] = chunkData;
+
+                        // Extract chunk index to track total chunks
+                        size_t underscorePos = currentChunkName.find_last_of('_');
+                        if (underscorePos != std::string::npos) {
+                            int chunkIdx = std::stoi(currentChunkName.substr(underscorePos + 1));
+                            if (chunkIdx >= _activeTransfers[transferKey].totalChunks) {
+                                _activeTransfers[transferKey].totalChunks = chunkIdx + 1;
+                            }
+                        }
+
+                        currentChunkName.clear();
+                    }
+                }
+
+                if (buffer.empty()) break;
+            }
+        }
     }
     catch (const std::exception& e) {
         std::cerr << "Peer communication failed: " << e.what() << std::endl;
     }
 }
-
 
