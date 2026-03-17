@@ -1,28 +1,28 @@
-# 🚀 P2P File Sharing and Messaging System (C++ / Boost.Asio)
+# P2P File Sharing and Messaging System (C++ / Boost.Asio)
 
 This project is a **peer-to-peer file sharing and messaging application** written in C++ using **Boost.Asio** for asynchronous networking. It allows multiple peers to connect with each other directly, exchange text messages, and share files in a decentralized manner without relying on a central server.
 
 ---
 
-## ✨ Features
+## Features
 
-* 🔌 **Peer Discovery & Direct Connections**
+*  **Peer Discovery & Direct Connections**
   Connect directly to peers using their IP address and port.
 
-* 📡 **Message Sending**
+*  **Message Sending**
   Send direct text messages to connected peers using a `send` command.
 
-* 📣 **Broadcast Messaging**
+*  **Broadcast Messaging**
   Use `echo` to send a message to all connected peers simultaneously.
 
-* 📁 **(Upcoming)** File transfer capabilities between peers.
+*  **(Upcoming)** File transfer capabilities between peers.
 
-* 🧵 **Thread-safe Communication**
+*  **Thread-safe Communication**
   All shared structures like the peer map are protected with mutexes to ensure thread safety.
 
 ---
 
-## 📦 Dependencies
+## Dependencies
 
 * [Boost.Asio](https://think-async.com/) (header-only or linked)
 * C++17 or later
@@ -31,7 +31,7 @@ Make sure Boost is correctly installed on your system.
 
 ---
 
-## 🧠 Project Structure
+## Project Structure
 
 p2p-sharing/<br>
 ├── include/<br>
@@ -49,7 +49,7 @@ p2p-sharing/<br>
 
 ---
 
-## 🛠️ Commands
+## Commands
 
 ### Connect to a peer
 
@@ -95,7 +95,7 @@ echo Hello everyone!
 
 ---
 
-## 🧪 Example Interaction
+##  Example Interaction
 
 Clients
 ![c1](https://github.com/user-attachments/assets/5a1683d9-57dc-4587-bdef-c09656060031)
@@ -108,7 +108,7 @@ Server Logs
 
 ---
 
-## 🧩 How Peer Identification Works
+##  How Peer Identification Works
 
 Each peer is uniquely identified by a string of the form:
 
@@ -120,12 +120,12 @@ When connecting, peers must announce their identity, and the application stores 
 
 ---
 
-## 📚 Future Improvements
+##  Future Improvements
 
-* 🔐 Add peer authentication
-* 📁 File sharing (send/receive files)
-* 📡 NAT traversal / peer discovery service
-* 🖥️ GUI interface using Qt or ImGui
+*  Add peer authentication
+*  File sharing (send/receive files)
+*  NAT traversal / peer discovery service
+*  GUI interface using Qt or ImGui
 
 ---
 
@@ -134,7 +134,7 @@ Start one instance for each peer using different ports.
 
 ---
 
-## 👨‍💻 Author
+##  Author
 
 Developed by [Bibidh Subedi](https://github.com/bibidhsubedi0)
 Feel free to open issues or contribute!
